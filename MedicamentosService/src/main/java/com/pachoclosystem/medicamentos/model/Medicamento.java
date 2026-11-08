@@ -1,11 +1,25 @@
 package com.pachoclosystem.medicamentos.model;
 
 import com.pachoclosystem.medicamentos.exception.SolicitudInvalidaException;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDate;
 
+/**
+ * Entidad principal de Medicamento mapeada como Documento MongoDB en la colección "medicamentos".
+ * Se incluye un índice compuesto único para replicar la restricción de negocio (nombre + concentración + presentación + lote).
+ */
+@Document(collection = "medicamentos")
+@CompoundIndex(
+    name = "idx_medicamento_clave_unica", 
+    def = "{'datos.nombre': 1, 'datos.concentracion': 1, 'datos.presentacion': 1, 'datos.lote': 1}", 
+    unique = true
+)
 public class Medicamento {
 
+    @Id
     private final String idMedicamento;
     private volatile DatosMedicamento datos;
     private volatile int cantidadStock;
@@ -26,10 +40,7 @@ public class Medicamento {
     }
 
     /**
-     * Resta unidades del stock si alcanzan. Entre peticiones, lo que impide que
-     * dos salidas simultáneas dejen el stock en negativo es el bloqueo de fila
-     * con el que {@code MedicamentoService} lee el medicamento; la restricción
-     * {@code cantidad_stock >= 0} de la base es la última defensa.
+     * Resta unidades del stock si alcanzan.
      */
     public synchronized void retirarStock(int cantidad) {
         if (cantidad > cantidadStock) {
@@ -55,7 +66,6 @@ public class Medicamento {
         return datos;
     }
 
-    /** Lo usa el repositorio, que es quien garantiza la unicidad de los datos. */
     public void setDatos(DatosMedicamento datos) {
         this.datos = datos;
     }

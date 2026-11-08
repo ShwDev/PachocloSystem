@@ -1,11 +1,15 @@
 package com.pachoclosystem.pachoclosystem.model;
 
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 /**
- * Paciente. Su historial clínico está aparte
- * ({@code IRegistroClinicoRepository}): leer un paciente no carga sus registros.
+ * Paciente mapeado como Documento MongoDB en la colección "pacientes".
  */
+@Document(collection = "pacientes")
 public class Paciente {
 
+    @Id
     private final String idPaciente;
     private volatile String nombre;
     private volatile int edad;
@@ -28,7 +32,6 @@ public class Paciente {
         this.habitacion = nuevaHabitacion;
     }
 
-    //actualiza nombre, edad y habitación de una sola vez
     public void actualizarDatos(String nuevoNombre, int nuevaEdad, int nuevaHabitacion) {
         this.nombre = nuevoNombre;
         this.edad = nuevaEdad;
@@ -39,15 +42,10 @@ public class Paciente {
         return idPaciente;
     }
 
-    /** {@code true} mientras el paciente no haya sido dado de baja (soft delete). */
     public boolean isActivo() {
         return activo;
     }
 
-    /**
-     * Soft delete: marca al paciente como inactivo de forma idempotente. El
-     * paciente (y su historial) se conserva; no hay reactivación.
-     */
     public void desactivar() {
         this.activo = false;
     }
@@ -69,4 +67,4 @@ public class Paciente {
         return "ID: " + idPaciente + " | Nombre: " + nombre + " | Edad: " + edad
                 + " | Habitación: " + habitacion;
     }
-}
+}   
