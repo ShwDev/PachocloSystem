@@ -2,6 +2,7 @@ package com.pachoclosystem.pachoclosystem.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.PersistenceCreator;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -9,6 +10,25 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+/**
+ * Usuario de acceso a la API.
+ *
+ * <p>Guarda <strong>únicamente</strong> el hash BCrypt de la contraseña; la
+ * contraseña en claro nunca se almacena ni se muestra. Ni {@code toString()}
+ * ni la serialización JSON incluyen el hash.</p>
+ *
+ * <p>El hash, la versión de token y el cambio pendiente viven juntos en un
+ * {@link Credenciales} inmutable que se sustituye entero: el login lo lee una
+ * sola vez, comprueba la contraseña contra ese hash y pone esa versión en el
+ * token, así un cambio de contraseña simultáneo nunca produce un token con la
+ * versión nueva validado con la contraseña anterior. Cambiar la contraseña y
+ * desactivar incrementan la versión (revocan los tokens emitidos antes);
+ * {@link #reactivar()} no la restaura.</p>
+ *
+ * <p>El rol y el trabajador vinculado solo cambian con
+ * {@link #cambiarRol(Rol, String)}, que valida su coherencia; no hay setters
+ * genéricos.</p>
+ */
 @Document(collection = "usuarios")
 public class Usuario {
 
@@ -42,6 +62,13 @@ public class Usuario {
         this.activo = true;
     }
 
+    /**
+     * Reconstruye un usuario ya guardado, con su estado completo. Es el creador
+     * que usa Spring Data al leer el documento de MongoDB: sus parámetros
+     * coinciden con las propiedades persistidas ({@code idUsuario, username,
+     * credenciales, rol, idTrabajador, activo}).
+     */
+    @PersistenceCreator
     public static Usuario restaurar(String idUsuario, String username, Credenciales credenciales, Rol rol,
                                     String idTrabajador, boolean activo) {
         Usuario usuario = new Usuario(idUsuario, username, credenciales.hash(), rol, idTrabajador);
