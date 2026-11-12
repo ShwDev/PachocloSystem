@@ -20,7 +20,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Base común de los tests MockMvc: arranca la aplicación completa contra la base
- * PostgreSQL de pruebas y la vacía antes de cada test (salvo el administrador),
+ * MongoDB de pruebas y la vacía antes de cada test (salvo el administrador),
  * de modo que cada prueba es independiente del orden de ejecución y de los datos
  * creados por otras pruebas.
  *
@@ -78,7 +78,7 @@ public abstract class MockMvcBaseTest {
     protected LimitadorIntentosLogin limitadorIntentos;
 
     @Autowired
-    protected JdbcClient jdbc;
+    protected MongoTemplate mongoTemplate;
 
     @Autowired
     private AdminInicial adminInicial;
@@ -97,7 +97,7 @@ public abstract class MockMvcBaseTest {
     @BeforeEach
     void limpiarBaseDeDatos() {
         String admin = entorno.getProperty(AdminInicial.PROP_USERNAME, "admin").trim();
-        BaseDeDatosDePruebas.vaciar(jdbc, admin);
+        BaseDeDatosDePruebas.vaciar(mongoTemplate, admin);
         if (!repositorioUsuarios.existePorUsername(admin)) {
             adminInicial.run(new DefaultApplicationArguments());
         }

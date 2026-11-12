@@ -5,8 +5,8 @@ import com.pachoclosystem.pachoclosystem.model.Paciente;
 import java.util.List;
 
 /**
- * Pacientes. La implementación de la aplicación es {@link PacienteRepositoryJdbc}
- * (PostgreSQL). Los registros clínicos tienen su propio repositorio
+ * Pacientes. La implementación de la aplicación es {@link PacienteRepositoryMongo}
+ * (MongoDB). Los registros clínicos tienen su propio repositorio
  * ({@link IRegistroClinicoRepository}).
  *
  * <p>Las modificaciones solo se aplican a pacientes activos: si el paciente no

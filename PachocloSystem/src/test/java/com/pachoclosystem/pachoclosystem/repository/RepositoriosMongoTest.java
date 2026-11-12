@@ -15,26 +15,29 @@ import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /**
- * Implementaciones JDBC de los repositorios contra la base PostgreSQL de
- * pruebas: lo que se guarda se relee de la base (no de un objeto en memoria),
- * los ids salen de las secuencias y las restricciones de la tabla actúan.
+ * Implementaciones MongoDB de los repositorios contra la base de pruebas: lo
+ * que se guarda se relee de la base (no de un objeto en memoria), los ids salen
+ * de las secuencias y los índices únicos actúan.
+ *
+ * <p>Diferencias con la versión PostgreSQL que sustituye: MongoDB no tiene
+ * claves foráneas ni restricciones CHECK, así que no se comprueban aquí; las
+ * reglas equivalentes viven en los servicios. Los listados sin criterio propio
+ * (pacientes y trabajadores) salen ordenados por {@code _id}, no por orden de
+ * alta.</p>
  */
-class RepositoriosJdbcTest extends MockMvcBaseTest {
+class RepositoriosMongoTest extends MockMvcBaseTest {
 
-    private static final String HASH = "$2a$10$de.mentira.para.el.repositorio.jdbc";
+    private static final String HASH = "$2a$10$de.mentira.para.el.repositorio.mongo";
 
     @Autowired
     private IRegistroClinicoRepository repositorioRegistros;
@@ -60,9 +63,9 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
         assertThat(ana.getHabitacion()).isEqualTo(201);
         assertThat(ana.isActivo()).isTrue();
         assertThat(repositorioPacientes.buscarPorId("PAC-0001").getHabitacion()).isEqualTo(305);
-        // En orden de alta, no de id.
+        // En MongoDB el listado sale por _id ascendente (como el de la API).
         assertThat(repositorioPacientes.obtenerTodos()).extracting(Paciente::getIdPaciente)
-                .containsExactly("PAC-0002", "PAC-0001");
+                .containsExactly("PAC-0001", "PAC-0002");
         assertThat(repositorioPacientes.buscarPorId("PAC-9999")).isNull();
     }
 
@@ -104,8 +107,9 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
         assertThat(((Doctor) doctor).getEspecialidad()).isEqualTo("Cardiologia");
         assertThat(enfermero).isInstanceOf(Enfermero.class);
         assertThat(((Enfermero) enfermero).getNivelExperiencia()).isEqualTo(NivelExperiencia.AVANZADO);
+        // También por _id ascendente: DOC antes que ENF.
         assertThat(repositorioTrabajadores.obtenerTodos()).extracting(TrabajadorHospital::getIdTrabajador)
-                .containsExactly("ENF-0001", "DOC-0001");
+                .containsExactly("DOC-0001", "ENF-0001");
     }
 
     @Test
@@ -177,10 +181,21 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
     }
 
     @Test
-    void laBaseRechazaUnAdministradorConTrabajador() {
-        assertThatExceptionOfType(DataIntegrityViolationException.class).isThrownBy(() ->
-                jdbc.sql("INSERT INTO usuarios (id_usuario, username, password_hash, rol, id_trabajador) "
-                        + "VALUES ('USR-9001', 'x.admin', 'h', 'ADMIN', 'DOC-0001')").update());
+    void cambiarPasswordSiSigueSiendoSoloAplicaSiElHashNoCambio() {
+        repositorioUsuarios.guardar(new Usuario("USR-9001", "ana.torres", HASH, Rol.ADMIN, null));
+
+        assertThat(repositorioUsuarios.cambiarPasswordSiSigueSiendo("USR-9001", "$2a$10$otro.hash",
+                "$2a$10$tercero.hash", false)).isFalse();
+        assertThat(repositorioUsuarios.buscarPorId("USR-9001").getCredenciales().hash()).isEqualTo(HASH);
+
+        assertThat(repositorioUsuarios.cambiarPasswordSiSigueSiendo("USR-9001", HASH,
+                "$2a$10$nuevo.hash", false)).isTrue();
+        Usuario cambiado = repositorioUsuarios.buscarPorId("USR-9001");
+        assertThat(cambiado.getCredenciales().hash()).isEqualTo("$2a$10$nuevo.hash");
+        assertThat(cambiado.getCredenciales().version()).isEqualTo(1);
+        // El hash anterior ya no vale: el guard es de una sola vez.
+        assertThat(repositorioUsuarios.cambiarPasswordSiSigueSiendo("USR-9001", HASH,
+                "$2a$10$otro.mas.hash", false)).isFalse();
     }
 
     // ---------------------------------------------------------------- registros
@@ -189,13 +204,14 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
     void registroGuardaLaCopiaDelAutorYLaFechaExacta() {
         repositorioPacientes.guardarPaciente(new Paciente("PAC-0001", "Ana Torres", 30, 101));
         Doctor autor = new Doctor("DOC-0001", "Carlos Mena", "Cardiologia");
-        RegistroClinico registro = new RegistroClinico(TipoRegistro.MEDICACION, "Paracetamol", autor, "MED-0001", 2,
-                Clock.systemDefaultZone());
+        RegistroClinico registro = new RegistroClinico("PAC-0001", TipoRegistro.MEDICACION, "Paracetamol",
+                autor, "MED-0001", 2, Clock.systemDefaultZone());
 
         repositorioRegistros.insertar("PAC-0001", registro);
 
         RegistroClinico releido = repositorioRegistros.listarPorPaciente("PAC-0001").getFirst();
         assertThat(releido.getIdRegistro()).isEqualTo(registro.getIdRegistro());
+        assertThat(releido.getIdPaciente()).isEqualTo("PAC-0001");
         assertThat(releido.getFecha()).isEqualTo(registro.getFecha());
         assertThat(releido.getTipo()).isEqualTo(TipoRegistro.MEDICACION);
         assertThat(releido.getContenido()).isEqualTo("Paracetamol");
@@ -208,7 +224,7 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
     @Test
     void registroDeEnfermeroSinMedicacion() {
         repositorioPacientes.guardarPaciente(new Paciente("PAC-0001", "Ana Torres", 30, 101));
-        RegistroClinico registro = new RegistroClinico(TipoRegistro.EVOLUCION, "Estable",
+        RegistroClinico registro = new RegistroClinico("PAC-0001", TipoRegistro.EVOLUCION, "Estable",
                 new Enfermero("ENF-0001", "Maria Lopez", NivelExperiencia.NOVATO), Clock.systemDefaultZone());
 
         repositorioRegistros.insertar("PAC-0001", registro);
@@ -230,36 +246,25 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
         insertar("PAC-0002", base.plusMinutes(2), autor);
         insertar("PAC-0001", base.plusMinutes(1), autor);
         insertar("PAC-0003", base, autor);
-        // Misma fecha en dos pacientes: primero el paciente dado de alta antes.
-        insertar("PAC-0002", base.plusMinutes(3), autor);
-        insertar("PAC-0001", base.plusMinutes(3), autor);
         repositorioPacientes.darDeBaja("PAC-0003");
 
         List<IRegistroClinicoRepository.RegistroDePaciente> todos = repositorioRegistros.listarDePacientesActivos();
 
         assertThat(todos).extracting(IRegistroClinicoRepository.RegistroDePaciente::idPaciente)
-                .containsExactly("PAC-0001", "PAC-0002", "PAC-0001", "PAC-0002");
+                .containsExactly("PAC-0001", "PAC-0002");
         assertThat(todos.getFirst().nombrePaciente()).isEqualTo("Ana Torres");
         // El paciente dado de baja conserva su historial.
         assertThat(repositorioRegistros.listarPorPaciente("PAC-0003")).hasSize(1);
     }
 
-    @Test
-    void unRegistroNecesitaUnPacienteExistente() {
-        RegistroClinico registro = new RegistroClinico(TipoRegistro.EVOLUCION, "Estable",
-                new Doctor("DOC-0001", "Carlos Mena", "Cardiologia"), Clock.systemDefaultZone());
-
-        assertThatExceptionOfType(DataIntegrityViolationException.class)
-                .isThrownBy(() -> repositorioRegistros.insertar("PAC-9999", registro));
-    }
-
     // -------------------------------------------------------------- idempotencia
 
     @Test
-    void laClaveGuardaElRegistroComoJsonYLoDevuelveIgual() {
-        Instant ahora = Instant.parse("2026-06-15T10:00:00.123456Z");
+    void laClaveGuardaElRegistroYLoDevuelveIgual() {
+        // BSON Date guarda milisegundos: los datos de prueba van ya truncados.
+        Instant ahora = Instant.parse("2026-06-15T10:00:00.123Z");
         RegistroResponse registro = new RegistroResponse("reg-1", "PAC-0001", "Ana Torres",
-                LocalDateTime.of(2026, 6, 15, 10, 0, 0, 123_456_000), TipoRegistro.MEDICACION,
+                LocalDateTime.of(2026, 6, 15, 10, 0, 0, 123_000_000), TipoRegistro.MEDICACION,
                 new TrabajadorResponse("DOC-0001", "Carlos Mena", "Doctor",
                         "Cardiologia", null),
                 "Paracetamol", new RegistroResponse.MedicacionResponse("MED-0001", 2));
@@ -281,7 +286,7 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
 
     @Test
     void lasClavesCaducadasNoSeDevuelvenYSePurgan() {
-        Instant ahora = Instant.parse("2026-06-15T10:00:00Z").truncatedTo(ChronoUnit.MICROS);
+        Instant ahora = Instant.parse("2026-06-15T10:00:00Z");
         repositorioIdempotencia.guardar("vieja-0000000000000", "USR-0001", "PAC-0001", "h".repeat(64), null,
                 ahora.minusSeconds(3600));
         repositorioIdempotencia.guardar("nueva-0000000000000", "USR-0001", "PAC-0001", "h".repeat(64), null, ahora);
@@ -293,7 +298,7 @@ class RepositoriosJdbcTest extends MockMvcBaseTest {
     }
 
     private void insertar(String idPaciente, LocalDateTime fecha, TrabajadorHospital autor) {
-        repositorioRegistros.insertar(idPaciente, new RegistroClinico(UUID.randomUUID().toString(), fecha,
-                AutorRegistro.de(autor), TipoRegistro.EVOLUCION, "Estable", null, null));
+        repositorioRegistros.insertar(idPaciente, new RegistroClinico(UUID.randomUUID().toString(), idPaciente,
+                fecha, AutorRegistro.de(autor), TipoRegistro.EVOLUCION, "Estable", null, null));
     }
 }

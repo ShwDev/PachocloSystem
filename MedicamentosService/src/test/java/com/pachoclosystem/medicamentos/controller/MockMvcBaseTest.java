@@ -1,7 +1,7 @@
 package com.pachoclosystem.medicamentos.controller;
 
 import com.jayway.jsonpath.JsonPath;
-import com.pachoclosystem.medicamentos.PostgresTestBase;
+import com.pachoclosystem.medicamentos.MongoTestBase;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -15,13 +15,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Base común de los tests MockMvc: la aplicación completa contra el PostgreSQL de
+ * Base común de los tests MockMvc: la aplicación completa contra el MongoDB de
  * pruebas, con la fecha fijada en {@link #HOY} y la base vacía antes de cada test
- * (ver {@link PostgresTestBase}), de modo que cada prueba es independiente del
+ * (ver {@link MongoTestBase}), de modo que cada prueba es independiente del
  * orden de ejecución.
  */
 @AutoConfigureMockMvc
-abstract class MockMvcBaseTest extends PostgresTestBase {
+abstract class MockMvcBaseTest extends MongoTestBase {
 
     @Autowired
     protected MockMvc mockMvc;

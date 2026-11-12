@@ -1,9 +1,9 @@
 # PachocloSystem en Docker Compose
 
-Despliegue multicontenedor del sistema: 5 servicios, 2 redes y 3 volúmenes definidos en
+Despliegue multicontenedor del sistema: 5 servicios, 2 redes y 2 volúmenes definidos en
 [`docker-compose.yml`](../docker-compose.yml). Las imágenes se construyen desde los Dockerfiles de
-cada carpeta (`frontend/`, `PachocloSystem/`, `MedicamentosService/`) y las bases usan la imagen
-oficial `postgres:18`.
+cada carpeta (`frontend/`, `PachocloSystem/`, `MedicamentosService/`) y la base usa la imagen
+oficial `mongo:8`.
 
 ## Arquitectura
 
@@ -27,29 +27,37 @@ oficial `postgres:18`.
  ┌───────────────────────┼──────────┼────────────────────────────────────────┐
  │  red "interna"  (internal: true, sin salida a internet ni al host)        │
  │                       │          │ X-Api-Key                              │
- │                       ▼          ▼                                        │
- │              ┌─────────────┐  ┌──────────────────────┐                    │
- │              │ db-pachoclo │  │ medicamentos-service │ Spring Boot :8081  │
- │              │ PostgreSQL  │  └──────────┬───────────┘                    │
- │              └──────┬──────┘             ▼                                │
- │            vol. pachoclo-datos    ┌────────────────┐                      │
- │                                   │ db-medicamentos│ PostgreSQL           │
- │                                   └───────┬────────┘                      │
- │                                  vol. medicamentos-datos                  │
- └───────────────────────────────────────────────────────────────────────────┘
+ │                       │          ▼                                        │
+ │                       │   ┌──────────────────────┐                        │
+ │                       │   │ medicamentos-service │                        │
+ │                       │   │ Spring Boot :8081    │                        │
+ │                       │   └──────────┬───────────┘                        │
+ │                       │              │                                    │
+ │                       ▼              ▼                                    │
+ │                  ┌──────────────────────────┐                             │
+ │                  │           mongo          │  MongoDB 8 (replica rs0)    │
+ │                  └────────────┬─────────────┘                             │
+ │                               │ vol. mongo-datos                          │
+ │          mongo-init (one-shot: rs.initiate y espera a primario)            │
+ └───────────────────────────────┼───────────────────────────────────────────┘
 ```
+
+`mongo-init` es un contenedor de un solo uso: crea el replica set de un nodo (`rs0`) la primera vez
+y espera a que el nodo sea primario. En los siguientes arranques detecta que `rs0` ya existe y sale
+con `0`. `pachoclo-api` y `medicamentos-service` no arrancan hasta que termina.
 
 | Servicio | Imagen | Red(es) | Puerto al host | Volumen |
 |---|---|---|---|---|
 | `frontend` | build `./frontend` (nginx sin privilegios) | publica | **4200** → 8080 | — |
 | `pachoclo-api` | build `./PachocloSystem` (Java 25) | publica + interna | no | `pachoclo-logs` |
 | `medicamentos-service` | build `./MedicamentosService` (Java 25) | interna | no | — |
-| `db-pachoclo` | `postgres:18` | interna | no | `pachoclo-datos` |
-| `db-medicamentos` | `postgres:18` | interna | no | `medicamentos-datos` |
+| `mongo` | `mongo:8` | interna | no | `mongo-datos` |
+| `mongo-init` | `mongo:8` | interna | no | — |
 
 Flujo: el navegador solo habla con nginx. nginx sirve la SPA y reenvía `/api/*` a `pachoclo-api`
 (mismo origen, por eso no hace falta CORS). `pachoclo-api` es la única que habla con
-`medicamentos-service`, usando la clave compartida en la cabecera `X-Api-Key`.
+`medicamentos-service`, usando la clave compartida en la cabecera `X-Api-Key`. Ambos backends
+comparten la instancia de MongoDB, cada uno con su base (`pachoclosystem` y `medicamentos`).
 
 ## Cómo levantarlo
 
@@ -58,9 +66,9 @@ compila dentro de las imágenes.
 
 ```bash
 cp .env.example .env        # y cambie los valores (en PowerShell: Copy-Item .env.example .env)
-docker compose build        # construye las 3 imágenes (la primera vez tarda unos minutos)
-docker compose up -d        # arranca los 5 servicios en el orden de depends_on
-docker compose ps           # los 5 deben quedar "healthy"
+docker compose build        # construye las 3 imágenes propias (la primera vez tarda unos minutos)
+docker compose up -d        # arranca los servicios en el orden de depends_on
+docker compose ps           # los 4 de larga duración deben quedar "healthy"
 ```
 
 Abra <http://localhost:4200> e inicie sesión como `admin` con el valor de `ADMIN_PASSWORD`.
@@ -68,6 +76,7 @@ El administrador se crea solo en el primer arranque.
 
 ```bash
 docker compose logs -f pachoclo-api     # logs de un servicio
+docker compose logs mongo-init          # resultado de la inicialización del replica set
 docker compose stop                     # detiene sin borrar nada
 docker compose down                     # elimina contenedores y redes; los volúmenes (datos) se conservan
 docker compose down -v                  # ¡borra también los volúmenes: se pierden todos los datos!
@@ -88,15 +97,17 @@ marcadas como obligatorias hacen fallar el compose con un mensaje claro si falta
 | `MEDICAMENTOS_API_KEY` | **sí** | 32 caracteres o más | Clave compartida entre las dos APIs (`X-Api-Key`). |
 | `ADMIN_USERNAME` | no | `admin` | Usuario del administrador inicial. |
 | `ADMIN_PASSWORD` | **sí** | 10 caracteres o más | Contraseña del admin; solo se aplica al crearlo. |
-| `PACHOCLO_DB_NAME` / `_USER` | no | `pachoclosystem` / `pachoclosystem_app` | Base y rol de PachocloSystem. |
-| `PACHOCLO_DB_PASSWORD` | **sí** | — | Contraseña de ese rol. |
-| `MEDICAMENTOS_DB_NAME` / `_USER` | no | `medicamentos` / `medicamentos_app` | Base y rol de MedicamentosService. |
-| `MEDICAMENTOS_DB_PASSWORD` | **sí** | — | Contraseña de ese rol. |
+| `PACHOCLO_MONGO_URI` | **sí** | `mongodb://mongo:27017/pachoclosystem?replicaSet=rs0` | URI de la base de PachocloSystem (incluye la base). |
+| `MEDICAMENTOS_MONGO_URI` | **sí** | `mongodb://mongo:27017/medicamentos?replicaSet=rs0` | URI de la base de MedicamentosService. |
 | `CORS_ORIGENES` | no | *(vacío)* | Orígenes permitidos. No se necesita: nginx hace de proxy en el mismo origen. |
 | `NGINX_IP` | no | `172.28.10.10` | IP fija de nginx; es el único proxy de confianza para el límite de login. |
 
 `API_BASE_URL` no se usa aquí: solo la necesita el build de Vercel. En Docker el frontend llama a
 `/api` en su propio origen.
+
+Las dos URIs apuntan al servicio `mongo` (nombre de host dentro de la red) e incluyen
+`replicaSet=rs0`; sin él, las transacciones de MongoDB fallan. Para arrancar los backends fuera de
+Docker, cambie el host por `localhost:27017` y use un `mongod` con replica set.
 
 ## Criterios de la rúbrica → fragmento del compose
 
@@ -104,8 +115,8 @@ marcadas como obligatorias hacen fallar el compose con un mensaje claro si falta
 |---|---|
 | **1. Archivo `docker-compose.yml`** con extensión `.yml` | [`docker-compose.yml`](../docker-compose.yml) en la raíz; `docker compose config` lo valida. |
 | **2. Servicios** (mínimo 3) | 5 servicios bajo `services:` (ver abajo). |
-| **3. Enlaces entre servicios** | Variables que apuntan al nombre del servicio + `depends_on` con `service_healthy` (ver abajo). |
-| **4. Volúmenes** | Bloque `volumes:` y su uso en 3 servicios (ver abajo). |
+| **3. Enlaces entre servicios** | URIs y URLs con el nombre del servicio + `depends_on` con `service_healthy` / `service_completed_successfully` (ver abajo). |
+| **4. Volúmenes** | Bloque `volumes:` y su uso en 2 servicios (ver abajo). |
 | **5. Puertos** | `ports:` solo en `frontend` (ver abajo). |
 | **6. Redes** | Bloque `networks:` con `publica` e `interna` (ver abajo). |
 | 7. Publicación en Docker Hub y GitHub | Imágenes en `twcfine/pachoclo-*` ([`docker-compose.hub.yml`](../docker-compose.hub.yml)) y código en GitHub; ver la sección [Publicación](#publicación). |
@@ -117,11 +128,12 @@ services:
   frontend:             # build: ./frontend              (nginx + SPA Angular)
   pachoclo-api:         # build: ./PachocloSystem        (Spring Boot, JWT, roles)
   medicamentos-service: # build: ./MedicamentosService   (Spring Boot, inventario)
-  db-pachoclo:          # image: postgres:18
-  db-medicamentos:      # image: postgres:18
+  mongo:                # image: mongo:8                 (réplica de un nodo, rs0)
+  mongo-init:           # image: mongo:8                 (rs.initiate; termina y sale)
 ```
 
-Los 5 tienen `healthcheck` y `restart: unless-stopped`.
+Los de larga duración tienen `healthcheck` y `restart: unless-stopped`; `mongo-init` usa
+`restart: "no"` porque es de un solo uso.
 
 ### Enlaces entre servicios
 
@@ -131,18 +143,23 @@ El nombre del servicio es su nombre de host dentro de la red (DNS interno de Doc
   pachoclo-api:
     environment:
       MEDICAMENTOS_URL: http://medicamentos-service:8081          # API → microservicio
-      PACHOCLOSYSTEM_DB_URL: jdbc:postgresql://db-pachoclo:5432/${PACHOCLO_DB_NAME:-pachoclosystem}
+      SPRING_MONGODB_URI: ${PACHOCLO_MONGO_URI}                   # API → MongoDB
     depends_on:
-      db-pachoclo:
-        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
       medicamentos-service:
         condition: service_healthy
 
   medicamentos-service:
     environment:
-      MEDICAMENTOS_DB_URL: jdbc:postgresql://db-medicamentos:5432/${MEDICAMENTOS_DB_NAME:-medicamentos}
+      SPRING_MONGODB_URI: ${MEDICAMENTOS_MONGO_URI}
     depends_on:
-      db-medicamentos:
+      mongo-init:
+        condition: service_completed_successfully
+
+  mongo-init:
+    depends_on:
+      mongo:
         condition: service_healthy
 
   frontend:
@@ -156,19 +173,15 @@ Además, [`frontend/nginx.conf`](../frontend/nginx.conf) reenvía `/api/` a `htt
 ### Volúmenes
 
 ```yaml
-  db-pachoclo:
+  mongo:
     volumes:
-      - pachoclo-datos:/var/lib/postgresql        # datos de PachocloSystem
-  db-medicamentos:
-    volumes:
-      - medicamentos-datos:/var/lib/postgresql    # datos de MedicamentosService
+      - mongo-datos:/data/db                      # datos de las dos bases
   pachoclo-api:
     volumes:
       - pachoclo-logs:/var/log/pachoclo           # log de la aplicación (LOGGING_FILE_NAME)
 
 volumes:
-  pachoclo-datos:
-  medicamentos-datos:
+  mongo-datos:
   pachoclo-logs:
 ```
 
@@ -180,7 +193,7 @@ volumes:
       - "${FRONTEND_PORT:-4200}:8080"    # único puerto publicado al host
 ```
 
-Los demás servicios no tienen `ports:`; sus puertos (8080, 8081, 5432) solo existen dentro de las
+Los demás servicios no tienen `ports:`; sus puertos (8080, 8081, 27017) solo existen dentro de las
 redes de Docker.
 
 ### Redes
@@ -192,25 +205,29 @@ networks:
     ipam:
       config:
         - subnet: 172.28.10.0/24
-  interna:                         # bases de datos y medicamentos-service
+  interna:                         # MongoDB y medicamentos-service
     driver: bridge
     internal: true                 # sin salida a internet ni al host
 ```
 
 `pachoclo-api` está en las dos redes (`publica:` e `interna:`); `frontend` solo en `publica`;
-`medicamentos-service` y las bases solo en `interna`. Así el frontend no puede alcanzar las bases
-ni el microservicio.
+`medicamentos-service`, `mongo` y `mongo-init` solo en `interna`. Así el frontend no puede alcanzar
+la base ni el microservicio.
 
 ## Publicación
 
-Las 3 imágenes propias están publicadas (públicas) en Docker Hub con los tags `1.0` y `latest`.
-Las bases usan la imagen oficial `postgres:18`, que no se republica.
+Las 3 imágenes propias se publican (públicas) en Docker Hub con los tags `1.0` y `latest`. La base
+usa la imagen oficial `mongo:8`, que no se republica.
 
-| Imagen | Docker Hub | Digest de `1.0` y `latest` |
-|---|---|---|
-| `twcfine/pachoclo-frontend` | <https://hub.docker.com/r/twcfine/pachoclo-frontend> | `sha256:efd8ca32533b9a6d0a7de6ee95482c817bc0b7f482e90d5500de9dee21d8c53f` |
-| `twcfine/pachoclo-api` | <https://hub.docker.com/r/twcfine/pachoclo-api> | `sha256:5a66b1e378ac2ba113802ab2a0f9c79fc0d12459e01aad61f6d4914ce7b3a63c` |
-| `twcfine/pachoclo-medicamentos` | <https://hub.docker.com/r/twcfine/pachoclo-medicamentos> | `sha256:494e202b2b017f915b07aa481bb2b2187e34ef3c956bc21d91fd26154a09f541` |
+| Imagen | Docker Hub |
+|---|---|
+| `twcfine/pachoclo-frontend` | <https://hub.docker.com/r/twcfine/pachoclo-frontend> |
+| `twcfine/pachoclo-api` | <https://hub.docker.com/r/twcfine/pachoclo-api> |
+| `twcfine/pachoclo-medicamentos` | <https://hub.docker.com/r/twcfine/pachoclo-medicamentos> |
+
+> **Importante:** los tags `1.0` y `latest` publicados hasta ahora corresponden a la versión con
+> PostgreSQL. Con la migración a MongoDB hay que **reconstruir y volver a publicar** las tres
+> imágenes antes de usar `docker-compose.hub.yml`; las antiguas no leen `SPRING_MONGODB_URI`.
 
 Perfil: <https://hub.docker.com/u/twcfine>. Código: <https://github.com/TWC-FINE/PachocloSystem>.
 
@@ -236,15 +253,15 @@ for i in api medicamentos frontend; do
 done
 ```
 
-Antes de publicar se comprobó que las imágenes no contienen `.env`, claves privadas ni secretos
-(solo el bundle de certificados raíz de Alpine), y después, sin autenticación, que los 3
-repositorios son públicos (`is_private: false`).
+Antes de publicar, compruebe que las imágenes no contienen `.env`, claves privadas ni secretos
+(solo el bundle de certificados raíz de Alpine) y que los 3 repositorios son públicos.
 
 ### Ejecutarlo solo con Docker Hub
 
 [`docker-compose.hub.yml`](../docker-compose.hub.yml) es igual que `docker-compose.yml` salvo que
 las 3 imágenes propias se **descargan** (`image:`) en vez de construirse (`build:`). Solo hacen falta
-ese archivo y un `.env` copiado de `.env.example`; no hace falta el código fuente.
+ese archivo y un `.env` copiado de `.env.example`; no hace falta el código fuente. MongoDB se
+descarga igualmente de la imagen oficial.
 
 ```bash
 cp .env.example .env
@@ -253,15 +270,17 @@ docker compose -f docker-compose.hub.yml up -d      # luego: http://localhost:42
 docker compose -f docker-compose.hub.yml down       # (con -v también borra los datos)
 ```
 
-Se probó en una carpeta con solo esos dos archivos y sin imágenes locales de `twcfine/*`: el `pull`
-las descargó, los 5 servicios quedaron `healthy`, el login del admin respondió 200 y los digests de
-las imágenes en ejecución coincidían con los publicados.
+En una carpeta con solo esos dos archivos y sin imágenes locales de `twcfine/*`, el `pull` descarga
+las imágenes, se inicializa `rs0` y los servicios de larga duración quedan `healthy`. El login del
+admin responde 200 y los datos sobreviven a `down` (sin `-v`).
 
 ## Seguridad aplicada
 
 - **Contenedores sin root:** los backends corren como `app` (uid 10001) y nginx como `nginx` (uid 101).
 - **Sin secretos en las imágenes:** `.dockerignore` excluye `.env`; todo llega por variables en ejecución.
-- **Aislamiento de red:** bases de datos y `medicamentos-service` en una red `internal`, sin puertos al host.
+- **Aislamiento de red:** la base y `medicamentos-service` están en una red `internal`, sin puertos al host.
+- **MongoDB sin autenticación, pero inalcanzable desde fuera:** no publica `27017` y solo está en la
+  red interna. Para un despliegue real, añada usuario y contraseña a la URI (Atlas ya lo exige).
 - **Límite de intentos de login con la IP real:** `APP_LOGIN_PROXIES_CONFIABLES` es **solo la IP de nginx**
   (`172.28.10.10`), no toda la subred. Si fuera `172.28.10.0/24`, la puerta de enlace
   (`172.28.10.1`, que es la IP con la que nginx ve al cliente) quedaría como "proxy" y un cliente
@@ -278,5 +297,7 @@ las imágenes en ejecución coincidían con los publicados.
   Solo se probó desde el mismo equipo: no se verificó cómo se ve un cliente remoto real.
 - **Una sola instancia de `pachoclo-api`:** el límite de login y la idempotencia del historial viven
   en su memoria.
-- **El rol de PostgreSQL es el superusuario de su propio contenedor** (`POSTGRES_USER`).
-- **No se incluyen** contenedores de Python, Node (servidor), Redis ni MongoDB: el sistema no los usa.
+- **MongoDB de un solo nodo.** `rs0` da transacciones, no alta disponibilidad: si el contenedor
+  `mongo` cae, el sistema responde `503` hasta que vuelva. Para producción, use un replica set
+  gestionado (Atlas o similar) con autenticación.
+- **No se incluyen** contenedores de Python, Node (servidor) ni Redis: el sistema no los usa.

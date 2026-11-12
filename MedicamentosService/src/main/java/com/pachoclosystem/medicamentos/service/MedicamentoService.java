@@ -7,7 +7,6 @@ import com.pachoclosystem.medicamentos.model.DatosMedicamento;
 import com.pachoclosystem.medicamentos.model.Medicamento;
 import com.pachoclosystem.medicamentos.repository.IMedicamentoRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -18,11 +17,14 @@ import java.util.Locale;
 /**
  * Reglas de negocio de los medicamentos.
  *
- * <p>Las operaciones que cambian un medicamento existente (entradas, salidas y
- * edición) se ejecutan en una transacción y leen el medicamento con
- * {@link IMedicamentoRepository#buscarPorIdParaActualizar}: comprobar y escribir
- * ocurre bajo el mismo bloqueo de fila, así que dos salidas simultáneas nunca
- * dejan el stock en negativo ni se pierde una actualización.</p>
+ * <p>No hace falta transacción: cada cambio de un medicamento existente es una
+ * única operación atómica sobre su documento —el stock con sus condiciones
+ * dentro de la consulta, los datos descriptivos con la clave de unicidad ya
+ * calculada—, así que dos peticiones simultáneas nunca dejan el stock en
+ * negativo ni pierden una actualización, aunque haya varias instancias del
+ * servicio. La transacción de varios documentos queda para las salidas con
+ * clave de idempotencia, que la abre {@link SalidasIdempotentesService} y a la
+ * que las operaciones del repositorio se unen solos.</p>
  */
 @Service
 public class MedicamentoService {
@@ -42,7 +44,6 @@ public class MedicamentoService {
         this.reloj = reloj;
     }
 
-    @Transactional
     public Medicamento registrarMedicamento(DatosMedicamento datos, int cantidadStock) {
         Medicamento medicamento = new Medicamento(repositorio.generarNuevoId(), recortar(datos), cantidadStock);
         if (!repositorio.guardar(medicamento)) {
@@ -55,9 +56,8 @@ public class MedicamentoService {
      * Edita los datos descriptivos; el stock no cambia. Si el medicamento se
      * elimina a la vez, la edición responde 404.
      */
-    @Transactional
     public Medicamento editarMedicamento(String id, DatosMedicamento datos) {
-        Medicamento medicamento = obtenerParaActualizar(id);
+        Medicamento medicamento = obtener(id);
         switch (repositorio.actualizarDatos(medicamento, recortar(datos))) {
             case DUPLICADO -> throw duplicado();
             case NO_EXISTE -> throw noEncontrado(id);
@@ -67,7 +67,6 @@ public class MedicamentoService {
         return medicamento;
     }
 
-    @Transactional
     public void eliminarMedicamento(String id) {
         if (!repositorio.eliminar(id)) {
             throw noEncontrado(id);
@@ -75,11 +74,7 @@ public class MedicamentoService {
     }
 
     public Medicamento obtenerMedicamento(String id) {
-        Medicamento medicamento = repositorio.buscarPorId(id);
-        if (medicamento == null) {
-            throw noEncontrado(id);
-        }
-        return medicamento;
+        return obtener(id);
     }
 
     /** Lista medicamentos; si hay texto, filtra por id, nombre o principio activo. */
@@ -93,27 +88,39 @@ public class MedicamentoService {
                 .toList();
     }
 
-    @Transactional
+    /** Suma unidades al stock; falla si el resultado desbordaría el máximo. */
     public Medicamento registrarEntrada(String id, int cantidad) {
-        Medicamento medicamento = obtenerParaActualizar(id);
-        medicamento.ingresarStock(cantidad);
-        repositorio.actualizarStock(id, medicamento.getCantidadStock());
-        return medicamento;
+        Medicamento actualizado = repositorio.sumarStock(id, cantidad);
+        if (actualizado == null) {
+            Medicamento medicamento = repositorio.buscarPorId(id);
+            if (medicamento == null) {
+                throw noEncontrado(id);
+            }
+            throw new SolicitudInvalidaException("La cantidad supera el stock máximo admitido.");
+        }
+        return actualizado;
     }
 
     /**
      * Resta stock; falla si no alcanza o si el medicamento está vencido. Si ya
-     * hay una transacción (salida con clave de idempotencia), se une a ella.
+     * hay una transacción (salida con clave de idempotencia), las operaciones
+     * del repositorio se unen a ella.
      */
-    @Transactional
     public Medicamento registrarSalida(String id, int cantidad) {
-        Medicamento medicamento = obtenerParaActualizar(id);
-        if (medicamento.estaVencido(hoy())) {
-            throw new SolicitudInvalidaException("No se puede dar salida a un medicamento vencido.");
+        LocalDate hoy = hoy();
+        Medicamento actualizado = repositorio.descontarStock(id, cantidad, hoy);
+        if (actualizado == null) {
+            Medicamento medicamento = repositorio.buscarPorId(id);
+            if (medicamento == null) {
+                throw noEncontrado(id);
+            }
+            if (medicamento.estaVencido(hoy)) {
+                throw new SolicitudInvalidaException("No se puede dar salida a un medicamento vencido.");
+            }
+            throw new SolicitudInvalidaException("Stock insuficiente: disponible "
+                    + medicamento.getCantidadStock() + ", solicitado " + cantidad + ".");
         }
-        medicamento.retirarStock(cantidad);
-        repositorio.actualizarStock(id, medicamento.getCantidadStock());
-        return medicamento;
+        return actualizado;
     }
 
     /** Medicamentos cuyo stock es igual o menor que su stock mínimo. */
@@ -150,9 +157,8 @@ public class MedicamentoService {
         return LocalDate.now(reloj);
     }
 
-    /** Lee y bloquea el medicamento hasta el final de la transacción; 404 si no existe. */
-    private Medicamento obtenerParaActualizar(String id) {
-        Medicamento medicamento = repositorio.buscarPorIdParaActualizar(id);
+    private Medicamento obtener(String id) {
+        Medicamento medicamento = repositorio.buscarPorId(id);
         if (medicamento == null) {
             throw noEncontrado(id);
         }

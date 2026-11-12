@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * Trabajadores (doctores y enfermeros). La implementación de la aplicación es
- * {@link TrabajadorRepositoryJdbc} (PostgreSQL).
+ * {@link TrabajadorRepositoryMongo} (MongoDB).
  */
 public interface ITrabajadoresRepository {
 

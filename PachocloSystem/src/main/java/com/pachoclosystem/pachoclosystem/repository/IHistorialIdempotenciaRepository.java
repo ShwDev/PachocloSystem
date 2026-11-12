@@ -7,8 +7,8 @@ import java.util.Optional;
 
 /**
  * Claves {@code Idempotency-Key} usadas al crear registros del historial. La
- * implementación de la aplicación es {@link HistorialIdempotenciaRepositoryJdbc}
- * (PostgreSQL). Una clave está vigente si se usó después de {@code limite}
+ * implementación de la aplicación es {@link HistorialIdempotenciaRepositoryMongo}
+ * (MongoDB). Una clave está vigente si se usó después de {@code limite}
  * (ahora menos la caducidad).
  */
 public interface IHistorialIdempotenciaRepository {

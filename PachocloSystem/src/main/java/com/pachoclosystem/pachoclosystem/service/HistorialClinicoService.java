@@ -205,8 +205,9 @@ public class HistorialClinicoService {
             }
         }
 
-        RegistroClinico registro = new RegistroClinico(tipo, contenidoFinal, autor, medicamento, cantidad, reloj);
-        return transacciones.execute(estado -> {
+        RegistroClinico registro = new RegistroClinico(paciente.getIdPaciente(), tipo, contenidoFinal, autor,
+                medicamento, cantidad, reloj);
+        return TransaccionConReintentos.ejecutar(transacciones, () -> {
             repositorioRegistros.insertar(paciente.getIdPaciente(), registro);
             RegistroResponse creado = RegistroResponse.from(paciente, registro);
             if (enLaMismaTransaccion != null) {

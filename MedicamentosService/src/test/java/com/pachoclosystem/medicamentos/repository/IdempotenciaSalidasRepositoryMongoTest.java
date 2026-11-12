@@ -1,33 +1,31 @@
 package com.pachoclosystem.medicamentos.repository;
 
-import com.pachoclosystem.medicamentos.PostgresTestBase;
+import com.pachoclosystem.medicamentos.MongoTestBase;
 import com.pachoclosystem.medicamentos.dto.MedicamentoResponse;
 import com.pachoclosystem.medicamentos.model.Presentacion;
 import com.pachoclosystem.medicamentos.repository.IdempotenciaSalidasRepository.SalidaRegistrada;
+import com.pachoclosystem.medicamentos.repository.IdempotenciaSalidasRepository.SalidaYaVigente;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.transaction.IllegalTransactionStateException;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.data.mongodb.core.query.Query;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/** Claves de idempotencia en PostgreSQL: respuesta guardada, caducidad, purga y bloqueo. */
-class IdempotenciaSalidasRepositoryJdbcTest extends PostgresTestBase {
+/** Claves de idempotencia en MongoDB: respuesta guardada, caducidad, purga y sustitución. */
+class IdempotenciaSalidasRepositoryMongoTest extends MongoTestBase {
 
     private static final Duration CADUCIDAD = Duration.ofHours(24);
     private static final String CLAVE = "8f14e45f-ceea-4672-a5b1-7a0c3c9e2f01";
 
     @Autowired
     private IdempotenciaSalidasRepository claves;
-
-    @Autowired
-    private TransactionTemplate transaccion;
 
     private static MedicamentoResponse respuesta(int stock) {
         return new MedicamentoResponse("MED-0001", "Dolex", "Paracetamol", Presentacion.TABLETA, "500 mg",
@@ -84,7 +82,7 @@ class IdempotenciaSalidasRepositoryJdbcTest extends PostgresTestBase {
         claves.guardar(CLAVE, "MED-0001", 3, respuesta(17), hecha, limite(hecha));
 
         Instant pronto = hecha.plusSeconds(60);
-        assertThatExceptionOfType(IllegalStateException.class)
+        assertThatExceptionOfType(SalidaYaVigente.class)
                 .isThrownBy(() -> claves.guardar(CLAVE, "MED-0002", 1, respuesta(9), pronto, limite(pronto)));
         assertThat(claves.buscarVigente(CLAVE, limite(pronto)).orElseThrow().idMedicamento())
                 .isEqualTo("MED-0001");
@@ -100,14 +98,8 @@ class IdempotenciaSalidasRepositoryJdbcTest extends PostgresTestBase {
         Instant ahora = vieja.plus(Duration.ofHours(25));
         assertThat(claves.purgarCaducadas(limite(ahora))).isEqualTo(1);
 
-        assertThat(jdbc.sql("SELECT clave FROM idempotencia_salidas").query(String.class).list())
+        assertThat(mongoTemplate.find(new Query(), org.bson.Document.class, "idempotencia_salidas"))
+                .extracting(documento -> documento.getString("_id"))
                 .containsExactly("clave-reciente-0000001");
-    }
-
-    @Test
-    void bloquearExigeUnaTransaccion() {
-        assertThatExceptionOfType(IllegalTransactionStateException.class)
-                .isThrownBy(() -> claves.bloquear(CLAVE));
-        transaccion.executeWithoutResult(estado -> claves.bloquear(CLAVE));
     }
 }

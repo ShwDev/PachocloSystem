@@ -3,15 +3,18 @@ package com.pachoclosystem.medicamentos.repository;
 import com.pachoclosystem.medicamentos.model.DatosMedicamento;
 import com.pachoclosystem.medicamentos.model.Medicamento;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
  * Almacenamiento de medicamentos. La implementación de la aplicación es
- * {@link MedicamentoRepositoryJdbc} (PostgreSQL).
+ * {@link MedicamentoRepositoryMongo} (MongoDB).
  *
- * <p>Los métodos que modifican un medicamento existente esperan que quien llama
- * lo haya leído antes con {@link #buscarPorIdParaActualizar(String)} dentro de la
- * misma transacción: así nadie más lo cambia entre la lectura y la escritura.</p>
+ * <p>No hay bloqueos de fila ni lecturas para actualizar: cada cambio de stock
+ * es una única operación atómica sobre el documento del medicamento (un
+ * {@code findAndModify} con las condiciones dentro de la consulta), así que dos
+ * salidas simultáneas nunca dejan el stock en negativo ni pierden una
+ * actualización, aunque haya varias instancias del servicio.</p>
  */
 public interface IMedicamentoRepository {
 
@@ -38,16 +41,27 @@ public interface IMedicamentoRepository {
      */
     ResultadoActualizacion actualizarDatos(Medicamento medicamento, DatosMedicamento nuevosDatos);
 
-    /** Guarda el stock de un medicamento ya leído con {@link #buscarPorIdParaActualizar}. */
-    void actualizarStock(String id, int cantidadStock);
-
-    Medicamento buscarPorId(String id);
+    /**
+     * Suma {@code cantidad} unidades al stock del medicamento, de forma atómica
+     * y solo si el resultado no desborda el máximo admitido (int de 32 bits).
+     *
+     * @return el medicamento con el stock ya sumado, o {@code null} si no existe
+     *         o la suma desbordaría el máximo
+     */
+    Medicamento sumarStock(String id, int cantidad);
 
     /**
-     * Como {@link #buscarPorId(String)}, pero bloquea el medicamento hasta el final
-     * de la transacción en curso: otra petición que quiera modificarlo espera.
+     * Resta {@code cantidad} unidades al stock del medicamento si alcanzan y el
+     * medicamento no está vencido a fecha de {@code hoy}, de forma atómica: una
+     * salida concurrente que dejara el stock por debajo de la cantidad no se
+     * aplica.
+     *
+     * @return el medicamento con el stock ya restado, o {@code null} si no
+     *         existe, no alcanza el stock o está vencido
      */
-    Medicamento buscarPorIdParaActualizar(String id);
+    Medicamento descontarStock(String id, int cantidad, LocalDate hoy);
+
+    Medicamento buscarPorId(String id);
 
     /** Todos los medicamentos, ordenados por id. */
     List<Medicamento> listarTodos();

@@ -1,6 +1,6 @@
 package com.pachoclosystem.medicamentos.service;
 
-import com.pachoclosystem.medicamentos.PostgresTestBase;
+import com.pachoclosystem.medicamentos.MongoTestBase;
 import com.pachoclosystem.medicamentos.exception.ConflictoException;
 import com.pachoclosystem.medicamentos.exception.SolicitudInvalidaException;
 import com.pachoclosystem.medicamentos.model.DatosMedicamento;
@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.query.Query;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -25,10 +26,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /**
- * Salidas con clave de idempotencia contra PostgreSQL real (claves, bloqueo y
+ * Salidas con clave de idempotencia contra MongoDB real (claves y
  * transacciones de verdad), con la fecha fijada.
  */
-class SalidasIdempotentesServiceTest extends PostgresTestBase {
+class SalidasIdempotentesServiceTest extends MongoTestBase {
 
     private static final String CLAVE = "8f14e45f-ceea-4672-a5b1-7a0c3c9e2f01";
 
@@ -127,8 +128,7 @@ class SalidasIdempotentesServiceTest extends PostgresTestBase {
         SalidasIdempotentesService.Resultado nueva = salidas.registrarSalida(dolex, 5, CLAVE);
         assertThat(nueva.repetida()).isFalse();
         assertThat(stock(dolex)).isEqualTo(12);
-        assertThat(jdbc.sql("SELECT count(*) FROM idempotencia_salidas").query(Long.class).single())
-                .isEqualTo(1L);
+        assertThat(mongoTemplate.count(new Query(), "idempotencia_salidas")).isEqualTo(1L);
     }
 
     @Test

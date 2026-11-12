@@ -131,9 +131,9 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 503: PostgreSQL no está disponible (sin conexión, sin transacción o fallo
-     * transitorio como un {@code lock_timeout}). Mensaje genérico; la transacción
-     * se deshizo, así que repetir la petición es seguro.
+     * 503: la base de datos (MongoDB) no está disponible (sin conexión, sin
+     * transacción o fallo transitorio como un conflicto de escritura). Mensaje
+     * genérico; la transacción se deshizo, así que repetir la petición es seguro.
      */
     @ExceptionHandler({DataAccessResourceFailureException.class, CannotCreateTransactionException.class,
             TransientDataAccessException.class})

@@ -1,6 +1,9 @@
 package com.pachoclosystem.pachoclosystem.model;
 
-public class Enfermero extends TrabajadorHospital{
+import org.springframework.data.annotation.TypeAlias;
+
+@TypeAlias("ENFERMERO")
+public class Enfermero extends TrabajadorHospital {
     private NivelExperiencia nivelExperiencia;
 
     public Enfermero(String idTrabajador, String nombreCompleto, NivelExperiencia nivelExperiencia) {
@@ -15,5 +18,4 @@ public class Enfermero extends TrabajadorHospital{
     public void setNivelExperiencia(NivelExperiencia nivelExperiencia) {
         this.nivelExperiencia = nivelExperiencia;
     }
-
 }

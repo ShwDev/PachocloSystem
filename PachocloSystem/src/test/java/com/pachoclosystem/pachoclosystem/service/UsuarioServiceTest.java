@@ -402,7 +402,7 @@ class UsuarioServiceTest {
     }
 
     // La desactivación simultánea de dos administradores (invariante del último
-    // administrador bajo concurrencia) se prueba contra PostgreSQL real en
+    // administrador bajo concurrencia) se prueba contra MongoDB real en
     // UsuarioConcurrenciaIntegrationTest: el bloqueo es de la base de datos.
 
     @Test

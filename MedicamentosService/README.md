@@ -9,32 +9,33 @@ puerto y no comparte código Java con él.
 ## Requisitos
 
 - **Java 25** (`JAVA_HOME` debe apuntar a un JDK 25; el `pom.xml` fija `java.version=25`).
-- **PostgreSQL** (probado con la 18) con las bases `medicamentos` y `medicamentos_test` (ver
-  [Base de datos](#base-de-datos)).
+- **MongoDB 8** con un **replica set** (aunque sea de un solo nodo): las transacciones de las salidas
+  idempotentes lo necesitan (ver [Base de datos](#base-de-datos)).
 - No hace falta instalar Maven: se usa el wrapper incluido.
 
 ## Cómo arrancar
 
-Desde la carpeta `MedicamentosService/`, con la contraseña de la base en el entorno:
+Desde la carpeta `MedicamentosService/`, con la URI de MongoDB en el entorno:
 
 ```bash
-MEDICAMENTOS_DB_PASSWORD=<contraseña> ./mvnw spring-boot:run      # Linux / macOS / Git Bash
+SPRING_MONGODB_URI='mongodb://localhost:27017/medicamentos?replicaSet=rs0' ./mvnw spring-boot:run
 ```
 
 ```powershell
-$env:MEDICAMENTOS_DB_PASSWORD = "<contraseña>"; .\mvnw.cmd spring-boot:run   # PowerShell
+$env:SPRING_MONGODB_URI = "mongodb://localhost:27017/medicamentos?replicaSet=rs0"
+.\mvnw.cmd spring-boot:run
 ```
 
 La API queda en `http://localhost:8081` (el servicio principal usa el 8080, así que pueden correr a la vez).
 Otros comandos útiles:
 
 ```bash
-./mvnw clean compile                                        # compilar
-MEDICAMENTOS_TEST_DB_PASSWORD=<contraseña> ./mvnw test      # pruebas (contra medicamentos_test)
+./mvnw clean compile     # compilar
+./mvnw test              # pruebas: Testcontainers arranca su propio MongoDB
 ```
 
-Los datos se guardan en **PostgreSQL** y sobreviven a los reinicios. Si la base no está disponible,
-el servicio no arranca.
+Los datos se guardan en **MongoDB** y sobreviven a los reinicios. Si la base no está disponible, el
+servicio no arranca: crea los índices al arrancar.
 
 ## Producción
 
@@ -45,8 +46,8 @@ Los valores por defecto son de **desarrollo**. En producción se arranca con el 
   error enumera lo que falta, con el nombre de cada variable y nunca su valor:
   - `MEDICAMENTOS_API_KEY` de al menos 32 caracteres (la misma en PachocloSystem): en producción la
     API nunca queda sin clave de servicio;
-  - `MEDICAMENTOS_DB_URL` que no apunte a localhost;
-  - `MEDICAMENTOS_DB_PASSWORD`.
+  - `SPRING_MONGODB_URI` definida y que no apunte a localhost (admite listas de hosts y
+    `mongodb+srv://`).
 - Escribe los **logs en JSON** (formato ECS) por la salida estándar.
 
 Sin el perfil, todo funciona como siempre (desarrollo y tests). El servicio no debe tener dirección
@@ -68,52 +69,41 @@ expuesto): `GET /actuator/health` (`503` si la base no está disponible),
 src/main/java/com/pachoclosystem/medicamentos/
 ├── controller/   endpoints REST
 ├── service/      lógica de negocio (stock, vencimientos, duplicados, idempotencia de salidas)
-├── repository/   repositorios de medicamentos y de claves de idempotencia (JDBC, PostgreSQL)
+├── repository/   repositorios de medicamentos, claves de idempotencia y secuencias (MongoDB)
 ├── model/        Medicamento, DatosMedicamento, Presentacion
 ├── dto/          requests y responses (records con Bean Validation)
-├── config/       @Bean Clock (fecha actual, fijable en pruebas)
+├── config/       @Bean Clock, transacciones de MongoDB y validación de producción
 └── exception/    errores y @RestControllerAdvice
-
-src/main/resources/db/migration/   migraciones de Flyway (V1 medicamentos, V2 idempotencia)
 ```
 
 ## Base de datos
 
-PostgreSQL con dos tablas, creadas por **Flyway** al arrancar:
+MongoDB con dos colecciones. Los índices los crea el servicio al arrancar (no hay migraciones
+manuales):
 
-| Tabla | Contenido |
+| Colección | Contenido |
 |---|---|
-| `medicamentos` | Un medicamento por fila, con su stock. Restricciones: `cantidad_stock >= 0`, `stock_minimo` entre 0 y 1 000 000, `presentacion` del enum y `clave_unica` (nombre + concentración + presentación + lote normalizados) única. Los ids `MED-0001` salen de la secuencia `medicamentos_id_seq` |
-| `idempotencia_salidas` | Salidas hechas con `Idempotency-Key`: clave (PK), medicamento, cantidad, respuesta guardada (JSONB) y momento. Sin clave foránea: borrar un medicamento no se bloquea por sus salidas |
+| `medicamentos` | Un documento por medicamento, con su stock. Reglas: stock entre 0 y 1 000 000 y `claveUnica` (nombre + concentración + presentación + lote normalizados) con **índice único**. Los ids `MED-0001` salen de la colección `secuencias` (`medicamentos_id_seq`) |
+| `idempotencia_salidas` | Salidas hechas con `Idempotency-Key`: `_id` es la clave, medicamento, cantidad, respuesta guardada y `hechaEn` (indexado, para purgar las caducadas) |
 
 | Variable de entorno | Propiedad | Por defecto |
 |---|---|---|
-| `MEDICAMENTOS_DB_URL` | `spring.datasource.url` | `jdbc:postgresql://localhost:5432/medicamentos` |
-| `MEDICAMENTOS_DB_USER` | `spring.datasource.username` | `medicamentos_app` |
-| `MEDICAMENTOS_DB_PASSWORD` | `spring.datasource.password` | *(sin valor en el repo)* |
-| `MEDICAMENTOS_DB_POOL` | `spring.datasource.hikari.maximum-pool-size` | `10` |
+| `SPRING_MONGODB_URI` | `spring.mongodb.uri` | `mongodb://localhost:27017/medicamentos` |
 
-Los tests usan **otra base**, `medicamentos_test` (`MEDICAMENTOS_TEST_DB_URL`, `MEDICAMENTOS_TEST_DB_USER`,
-`MEDICAMENTOS_TEST_DB_PASSWORD`, en `src/test/resources/config/application.properties`), y la vacían
-antes de cada prueba. Por seguridad se niegan a vaciar una base cuyo nombre no termine en `_test`.
+La base va **dentro de la URI**. Sin `replicaSet` las transacciones de MongoDB fallan al confirmar.
+En producción use un usuario y contraseña en la cadena (`mongodb+srv://…` en Atlas).
 
-Para crear las dos bases en un PostgreSQL local, como superusuario (cambie la contraseña):
+Los tests no usan una base externa: **Testcontainers** arranca un MongoDB de un nodo con replica set
+al abrir la sesión de JUnit, antes de crear los contextos de Spring. Solo hace falta Docker.
 
-```sql
-CREATE ROLE medicamentos_app LOGIN PASSWORD '<contraseña>';
-CREATE DATABASE medicamentos OWNER medicamentos_app ENCODING 'UTF8' TEMPLATE template0;
-CREATE DATABASE medicamentos_test OWNER medicamentos_app ENCODING 'UTF8' TEMPLATE template0;
-```
-
-El rol es dueño de las bases para que Flyway pueda crear las tablas (desde PostgreSQL 15 solo el
-dueño de la base puede crear en el esquema `public`). La contraseña no se guarda en el repositorio.
-
-**Concurrencia.** Entradas, salidas y ediciones leen el medicamento con `SELECT ... FOR UPDATE`
-dentro de una transacción: comprobar y escribir ocurre bajo el bloqueo de la fila, así que dos
-salidas simultáneas nunca dejan el stock en negativo ni se pierde una actualización (la restricción
-`cantidad_stock >= 0` es la última defensa). Un bloqueo que dure más de 3 s, o una conexión que no
-llegue en 3 s, responde `503`. Si se edita un medicamento mientras otra petición lo elimina, la
-edición responde `404`.
+**Concurrencia.** Entradas y salidas son un único `findAndModify` atómico con las condiciones dentro
+de la consulta (`cantidadStock <= 1 000 000 - cantidad` al sumar; `cantidadStock >= cantidad` y no
+vencido al restar): comprobar y escribir ocurre en el mismo paso, así que dos salidas simultáneas
+nunca dejan el stock en negativo ni se pierde una actualización, aunque haya varias instancias del
+servicio. La salida y su clave de idempotencia se guardan en la misma transacción de MongoDB; si dos
+peticiones compiten, el conflicto de escritura se reintenta y una responde con la salida de la otra.
+Si el medicamento desaparece mientras otra petición lo edita o lo elimina, la operación responde
+`404`.
 
 ## Modelo
 
@@ -177,16 +167,17 @@ curl -X POST localhost:8081/api/medicamentos/MED-0001/salidas \
 - **Misma clave con otro medicamento u otra cantidad:** `409`.
 - **Clave mal formada:** `400`. Debe tener de 16 a 100 caracteres: letras sin tilde, dígitos, guion o
   guion bajo (un UUID sirve).
-- **Peticiones simultáneas con la misma clave:** se atienden de una en una (un *advisory lock* de
-  PostgreSQL sobre la clave, válido aunque haya varias instancias del servicio); solo una descuenta y
-  todas reciben la misma respuesta.
+- **Peticiones simultáneas con la misma clave:** solo una descuenta. La primera inserta la clave en
+  su transacción; las demás chocan con el índice único del `_id`, su transacción se aborta (sin
+  descuento) y, al reintentar, reciben la misma respuesta. Funciona aunque haya varias instancias
+  del servicio.
 - **Solo se guardan las salidas que salen bien.** La salida y su clave se guardan en la misma
   transacción: una salida que falla (stock insuficiente, vencido, medicamento inexistente) no deja
   nada, así que su reintento se vuelve a evaluar: puede salir bien si entre tanto entró stock, o
   volver a fallar.
 - **Sin la cabecera**, la salida funciona exactamente como siempre.
 
-Las claves se guardan en **PostgreSQL** (tabla `idempotencia_salidas`) y **sobreviven a un reinicio**
+Las claves se guardan en **MongoDB** (colección `idempotencia_salidas`) y **sobreviven a un reinicio**
 del servicio:
 
 | Propiedad | Por defecto | Para qué |
@@ -194,7 +185,7 @@ del servicio:
 | `medicamentos.idempotencia.caducidad` | `24h` | Cuánto tiempo se recuerda cada clave |
 
 Una clave caducada se trata como nueva: un reintento después de ese plazo volvería a descontar.
-Las caducadas se borran de la tabla al registrar nuevas salidas con clave.
+Las caducadas se borran de la colección al registrar nuevas salidas con clave.
 
 ### Ejemplos
 
