@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Doble en memoria de {@link IUsuarioRepository} para los tests unitarios, sin
  * base de datos ({@link ConcurrentHashMap}). Devuelve siempre el mismo objeto
- * por usuario; la concurrencia real se prueba contra PostgreSQL.
+ * por usuario; la concurrencia real se prueba contra MongoDB.
  *
  * <p>Ningún método está {@code synchronized}: la unicidad de username y de
  * trabajador vinculado se resuelve con {@code putIfAbsent} sobre índices
@@ -145,6 +145,17 @@ public class UsuarioRepositoryEnMemoria implements IUsuarioRepository {
         if (usuario != null) {
             usuario.cambiarPassword(nuevoHash, exigirCambio);
         }
+    }
+
+    @Override
+    public boolean cambiarPasswordSiSigueSiendo(String idUsuario, String hashEsperado, String nuevoHash,
+                                                boolean exigirCambio) {
+        Usuario usuario = buscarPorId(idUsuario);
+        if (usuario == null || !Objects.equals(usuario.getPasswordHash(), hashEsperado)) {
+            return false;
+        }
+        usuario.cambiarPassword(nuevoHash, exigirCambio);
+        return true;
     }
 
     @Override

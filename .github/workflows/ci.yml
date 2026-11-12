@@ -1,8 +1,9 @@
-# Integración continua: pruebas de los dos servicios (contra PostgreSQL real) y del
+# Integración continua: pruebas de los dos servicios (contra MongoDB real) y del
 # frontend (tests, lint, formato y build) en cada push, a cualquier rama, y en cada PR.
 #
-# Las bases de PostgreSQL son contenedores efímeros del propio job: su contraseña
-# solo existe durante la ejecución y no protege ningún dato (no es un secreto).
+# Los tests arrancan su propio MongoDB con Testcontainers (réplica de un nodo, en
+# un puerto fijo), así que el runner solo necesita Docker, que ya trae
+# ubuntu-latest. No hay credenciales ni servicios que configurar.
 name: CI
 
 on:
@@ -21,24 +22,6 @@ jobs:
     name: PachocloSystem
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_DB: pachoclosystem_test
-          POSTGRES_USER: pachoclosystem_app
-          POSTGRES_PASSWORD: ci-postgres-efimero
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U pachoclosystem_app -d pachoclosystem_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-    env:
-      PACHOCLOSYSTEM_TEST_DB_URL: jdbc:postgresql://localhost:5432/pachoclosystem_test
-      PACHOCLOSYSTEM_TEST_DB_USER: pachoclosystem_app
-      PACHOCLOSYSTEM_TEST_DB_PASSWORD: ci-postgres-efimero
     defaults:
       run:
         working-directory: PachocloSystem
@@ -63,24 +46,6 @@ jobs:
     name: MedicamentosService
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_DB: medicamentos_test
-          POSTGRES_USER: medicamentos_app
-          POSTGRES_PASSWORD: ci-postgres-efimero
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U medicamentos_app -d medicamentos_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-    env:
-      MEDICAMENTOS_TEST_DB_URL: jdbc:postgresql://localhost:5432/medicamentos_test
-      MEDICAMENTOS_TEST_DB_USER: medicamentos_app
-      MEDICAMENTOS_TEST_DB_PASSWORD: ci-postgres-efimero
     defaults:
       run:
         working-directory: MedicamentosService

@@ -12,12 +12,13 @@ class ValidacionProduccionTest {
 
     private static final String CLAVE_SERVICIO = "clave-servicio-de-prueba-de-32-caracteres";
     private static final String PASSWORD_BD = "password-bd-de-prueba";
+    private static final String URI_MONGO = "mongodb+srv://usuario:" + PASSWORD_BD
+            + "@cluster0.mongodb.net/medicamentos?retryWrites=true&w=majority";
 
     private static MockEnvironment completa() {
         return new MockEnvironment()
                 .withProperty("medicamentos.api-key", CLAVE_SERVICIO)
-                .withProperty("spring.datasource.url", "jdbc:postgresql://postgres.railway.internal:5432/medicamentos")
-                .withProperty("spring.datasource.password", PASSWORD_BD);
+                .withProperty("spring.mongodb.uri", URI_MONGO);
     }
 
     @Test
@@ -31,8 +32,7 @@ class ValidacionProduccionTest {
                 .isThrownBy(() -> ValidacionProduccion.validar(new MockEnvironment()))
                 .withMessageContaining("perfil prod")
                 .withMessageContaining("MEDICAMENTOS_API_KEY")
-                .withMessageContaining("MEDICAMENTOS_DB_URL")
-                .withMessageContaining("MEDICAMENTOS_DB_PASSWORD");
+                .withMessageContaining("SPRING_MONGODB_URI");
     }
 
     @Test
@@ -50,11 +50,18 @@ class ValidacionProduccionTest {
     @Test
     void laBaseNoPuedeSerLocal() {
         assertThatIllegalStateException().isThrownBy(() -> ValidacionProduccion.validar(
-                completa().withProperty("spring.datasource.url", "jdbc:postgresql://localhost:5432/medicamentos")))
-                .withMessageContaining("MEDICAMENTOS_DB_URL");
-        assertThat(ValidacionProduccion.apuntaALocalhost("jdbc:postgresql://127.0.0.1:5432/x")).isTrue();
-        assertThat(ValidacionProduccion.apuntaALocalhost("jdbc:postgresql://[::1]:5432/x")).isTrue();
-        assertThat(ValidacionProduccion.apuntaALocalhost("jdbc:postgresql://postgres.railway.internal:5432/x"))
-                .isFalse();
+                completa().withProperty("spring.mongodb.uri", "mongodb://localhost:27017/medicamentos")))
+                .withMessageContaining("SPRING_MONGODB_URI");
+        assertThatIllegalStateException().isThrownBy(() -> ValidacionProduccion.validar(
+                completa().withProperty("spring.mongodb.uri", " ")))
+                .withMessageContaining("SPRING_MONGODB_URI");
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo("mongodb://127.0.0.1:27017/x")).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo("mongodb://[::1]:27017/x")).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo("mongodb://otro:27017,127.0.0.1:27017/x")).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo("mongodb://LOCALHOST:27017/x")).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo(null)).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo(
+                "mongodb://usuario:clave@mongo.railway.internal:27017/medicamentos?authSource=admin")).isFalse();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo(URI_MONGO)).isFalse();
     }
 }

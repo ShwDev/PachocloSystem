@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /**
  * Reglas de negocio de los medicamentos, sin base de datos (doble en memoria) y
- * con la fecha fijada. La concurrencia se prueba contra PostgreSQL en
+ * con la fecha fijada. La concurrencia se prueba contra MongoDB en
  * {@code ConcurrenciaStockIntegrationTest}.
  */
 class MedicamentoServiceTest {

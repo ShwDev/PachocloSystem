@@ -1,8 +1,10 @@
 package com.pachoclosystem.medicamentos.repository;
 
+import com.pachoclosystem.medicamentos.exception.SolicitudInvalidaException;
 import com.pachoclosystem.medicamentos.model.DatosMedicamento;
 import com.pachoclosystem.medicamentos.model.Medicamento;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -13,11 +15,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Doble en memoria de {@link IMedicamentoRepository} para los tests unitarios de
  * las reglas de negocio, sin base de datos. Reproduce el contrato de
- * {@link MedicamentoRepositoryJdbc} (ids, clave única, orden), pero no su
- * concurrencia: esa se prueba contra PostgreSQL.
+ * {@link MedicamentoRepositoryMongo} (ids, clave única, orden y guardas de
+ * stock), pero no su concurrencia: esa se prueba contra MongoDB.
  *
  * <p>Sin {@code @Repository}: no debe registrarse como bean en los tests con
- * contexto Spring, que usan el repositorio JDBC.</p>
+ * contexto Spring, que usan el repositorio MongoDB.</p>
  */
 public class MedicamentoRepositoryEnMemoria implements IMedicamentoRepository {
 
@@ -70,20 +72,37 @@ public class MedicamentoRepositoryEnMemoria implements IMedicamentoRepository {
         return ResultadoActualizacion.ACTUALIZADO;
     }
 
-    /** El objeto guardado es el mismo que modificó el servicio: no hay nada que copiar. */
     @Override
-    public void actualizarStock(String id, int cantidadStock) {
-        // Sin efecto en memoria.
+    public synchronized Medicamento sumarStock(String id, int cantidad) {
+        Medicamento guardado = buscarPorId(id);
+        if (guardado == null) {
+            return null;
+        }
+        try {
+            guardado.ingresarStock(cantidad);
+            return guardado;
+        } catch (SolicitudInvalidaException desborda) {
+            return null;
+        }
+    }
+
+    @Override
+    public synchronized Medicamento descontarStock(String id, int cantidad, LocalDate hoy) {
+        Medicamento guardado = buscarPorId(id);
+        if (guardado == null || guardado.estaVencido(hoy)) {
+            return null;
+        }
+        try {
+            guardado.retirarStock(cantidad);
+            return guardado;
+        } catch (SolicitudInvalidaException sinStock) {
+            return null;
+        }
     }
 
     @Override
     public Medicamento buscarPorId(String id) {
         return id == null ? null : medicamentos.get(id);
-    }
-
-    @Override
-    public Medicamento buscarPorIdParaActualizar(String id) {
-        return buscarPorId(id);
     }
 
     @Override

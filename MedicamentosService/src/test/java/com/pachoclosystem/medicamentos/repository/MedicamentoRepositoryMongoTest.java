@@ -1,29 +1,22 @@
 package com.pachoclosystem.medicamentos.repository;
 
-import com.pachoclosystem.medicamentos.PostgresTestBase;
+import com.pachoclosystem.medicamentos.MongoTestBase;
 import com.pachoclosystem.medicamentos.model.DatosMedicamento;
 import com.pachoclosystem.medicamentos.model.Medicamento;
 import com.pachoclosystem.medicamentos.model.Presentacion;
 import com.pachoclosystem.medicamentos.repository.IMedicamentoRepository.ResultadoActualizacion;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.transaction.IllegalTransactionStateException;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-/** Medicamentos en PostgreSQL: ids, unicidad de la clave, restricciones, orden y bloqueo. */
-class MedicamentoRepositoryJdbcTest extends PostgresTestBase {
+/** Medicamentos en MongoDB: ids, unicidad de la clave, orden y guardas atómicas de stock. */
+class MedicamentoRepositoryMongoTest extends MongoTestBase {
 
     @Autowired
     private IMedicamentoRepository repositorio;
-
-    @Autowired
-    private TransactionTemplate transaccion;
 
     private static DatosMedicamento datos(String lote, Presentacion presentacion) {
         return new DatosMedicamento("Dolex", "Paracetamol", presentacion, "500 mg", "Genfar", lote, 10,
@@ -35,8 +28,8 @@ class MedicamentoRepositoryJdbcTest extends PostgresTestBase {
     }
 
     @Test
-    void elRepositorioDeLaAplicacionEsElDePostgres() {
-        assertThat(repositorio).isInstanceOf(MedicamentoRepositoryJdbc.class);
+    void elRepositorioDeLaAplicacionEsElDeMongo() {
+        assertThat(repositorio).isInstanceOf(MedicamentoRepositoryMongo.class);
     }
 
     @Test
@@ -135,25 +128,50 @@ class MedicamentoRepositoryJdbcTest extends PostgresTestBase {
     }
 
     @Test
-    void actualizarStockLoGuardaSinTocarLosDatos() {
+    void guardarLosMismosDatosNoEsUn404() {
         Medicamento medicamento = nuevo("L-1");
         repositorio.guardar(medicamento);
 
-        repositorio.actualizarStock(medicamento.getIdMedicamento(), 77);
+        assertThat(repositorio.actualizarDatos(medicamento, datos("L-1", Presentacion.TABLETA)))
+                .isEqualTo(ResultadoActualizacion.ACTUALIZADO);
+    }
+
+    @Test
+    void sumarYDescontarStockLoGuardanSinTocarLosDatos() {
+        Medicamento medicamento = nuevo("L-1");
+        repositorio.guardar(medicamento);
+
+        Medicamento sumado = repositorio.sumarStock(medicamento.getIdMedicamento(), 5);
+        assertThat(sumado.getCantidadStock()).isEqualTo(15);
+
+        Medicamento descontado = repositorio.descontarStock(medicamento.getIdMedicamento(), 3, HOY);
+        assertThat(descontado.getCantidadStock()).isEqualTo(12);
 
         Medicamento leido = repositorio.buscarPorId(medicamento.getIdMedicamento());
-        assertThat(leido.getCantidadStock()).isEqualTo(77);
+        assertThat(leido.getCantidadStock()).isEqualTo(12);
         assertThat(leido.getDatos()).isEqualTo(medicamento.getDatos());
     }
 
     @Test
-    void laBaseRechazaUnStockNegativo() {
+    void lasGuardasDeStockNoAplicanElCambio() {
         Medicamento medicamento = nuevo("L-1");
         repositorio.guardar(medicamento);
 
-        assertThatExceptionOfType(DataIntegrityViolationException.class)
-                .isThrownBy(() -> repositorio.actualizarStock(medicamento.getIdMedicamento(), -1));
+        assertThat(repositorio.descontarStock(medicamento.getIdMedicamento(), 11, HOY)).isNull();
+        assertThat(repositorio.sumarStock(medicamento.getIdMedicamento(), Integer.MAX_VALUE)).isNull();
+        assertThat(repositorio.descontarStock(medicamento.getIdMedicamento(), 1, HOY.plusYears(2))).isNull();
+        assertThat(repositorio.sumarStock("MED-9999", 1)).isNull();
+        assertThat(repositorio.descontarStock("MED-9999", 1, HOY)).isNull();
         assertThat(repositorio.buscarPorId(medicamento.getIdMedicamento()).getCantidadStock()).isEqualTo(10);
+    }
+
+    @Test
+    void elMedicamentoQueVenceHoyTodaviaSePuedeDescontar() {
+        Medicamento medicamento = nuevo("L-1");
+        repositorio.guardar(medicamento);
+
+        assertThat(repositorio.descontarStock(medicamento.getIdMedicamento(), 1,
+                medicamento.getDatos().fechaVencimiento())).isNotNull();
     }
 
     @Test
@@ -194,19 +212,7 @@ class MedicamentoRepositoryJdbcTest extends PostgresTestBase {
     void buscarConIdNuloDevuelveNulo() {
         assertThat(repositorio.buscarPorId(null)).isNull();
         assertThat(repositorio.eliminar(null)).isFalse();
-        Medicamento bloqueado = transaccion.execute(estado -> repositorio.buscarPorIdParaActualizar(null));
-        assertThat(bloqueado).isNull();
-    }
-
-    @Test
-    void bloquearParaActualizarExigeUnaTransaccion() {
-        Medicamento medicamento = nuevo("L-1");
-        repositorio.guardar(medicamento);
-
-        assertThatExceptionOfType(IllegalTransactionStateException.class)
-                .isThrownBy(() -> repositorio.buscarPorIdParaActualizar(medicamento.getIdMedicamento()));
-        Medicamento bloqueado = transaccion.execute(
-                estado -> repositorio.buscarPorIdParaActualizar(medicamento.getIdMedicamento()));
-        assertThat(bloqueado.getCantidadStock()).isEqualTo(10);
+        assertThat(repositorio.sumarStock(null, 1)).isNull();
+        assertThat(repositorio.descontarStock(null, 1, HOY)).isNull();
     }
 }

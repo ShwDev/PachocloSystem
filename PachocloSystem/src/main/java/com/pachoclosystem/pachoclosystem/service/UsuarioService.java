@@ -9,9 +9,10 @@ import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -37,12 +38,21 @@ public class UsuarioService {
     private final IUsuarioRepository repositorio;
     private final TrabajadorService trabajadorService;
     private final PasswordEncoder passwordEncoder;
+    private final TransactionOperations transacciones;
 
+    /** Sin Spring (tests unitarios): sin transacción y sin reintentos. */
     public UsuarioService(IUsuarioRepository repositorio, TrabajadorService trabajadorService,
                           PasswordEncoder passwordEncoder) {
+        this(repositorio, trabajadorService, passwordEncoder, TransactionOperations.withoutTransaction());
+    }
+
+    @Autowired
+    public UsuarioService(IUsuarioRepository repositorio, TrabajadorService trabajadorService,
+                          PasswordEncoder passwordEncoder, TransactionOperations transacciones) {
         this.repositorio = repositorio;
         this.trabajadorService = trabajadorService;
         this.passwordEncoder = passwordEncoder;
+        this.transacciones = transacciones;
     }
 
     /**
@@ -181,24 +191,27 @@ public class UsuarioService {
      * pide o el último administrador activo. Sus tokens dejan de valer de
      * inmediato y no vuelven a valer aunque se reactive (sube la versión).
      */
-    @Transactional
     public Usuario desactivar(String idUsuario, String usernameSolicitante) {
         // Las operaciones que pueden dejar el sistema sin administradores activos
-        // (desactivar, activar, cambiar de rol) se serializan con un bloqueo de
-        // PostgreSQL: dos administradores no pueden desactivarse a la vez el uno al otro.
-        repositorio.bloquearAdministracion();
-        Usuario usuario = obtenerParaActualizar(idUsuario);
-        if (!usuario.isActivo()) {
-            return usuario;
-        }
-        if (usuario.getUsername().equals(Usuario.normalizarUsername(usernameSolicitante))) {
-            throw new ConflictoException("No puede desactivar su propio usuario.");
-        }
-        if (usuario.getRol() == Rol.ADMIN && repositorio.contarAdministradoresActivos() <= 1) {
-            throw new ConflictoException("No se puede desactivar al último administrador activo.");
-        }
-        repositorio.desactivar(idUsuario);
-        return obtener(idUsuario);
+        // (desactivar, activar, cambiar de rol) se serializan con el cerrojo
+        // administrativo: dos administradores no pueden desactivarse a la vez el
+        // uno al otro. Si dos chocan, MongoDB rechaza una y se reintenta con los
+        // datos frescos, que es cuando salta la regla del último administrador.
+        return TransaccionConReintentos.ejecutar(transacciones, () -> {
+            repositorio.bloquearAdministracion();
+            Usuario usuario = obtenerParaActualizar(idUsuario);
+            if (!usuario.isActivo()) {
+                return usuario;
+            }
+            if (usuario.getUsername().equals(Usuario.normalizarUsername(usernameSolicitante))) {
+                throw new ConflictoException("No puede desactivar su propio usuario.");
+            }
+            if (usuario.getRol() == Rol.ADMIN && repositorio.contarAdministradoresActivos() <= 1) {
+                throw new ConflictoException("No se puede desactivar al último administrador activo.");
+            }
+            repositorio.desactivar(idUsuario);
+            return obtener(idUsuario);
+        });
     }
 
     /**
@@ -206,18 +219,19 @@ public class UsuarioService {
      * del alta: un doctor o enfermero necesita que su trabajador siga existiendo,
      * sea de su tipo y siga vinculado a él. Si no, 409.
      */
-    @Transactional
     public Usuario activar(String idUsuario) {
-        repositorio.bloquearAdministracion();
-        Usuario usuario = obtenerParaActualizar(idUsuario);
-        if (usuario.isActivo()) {
-            return usuario;
-        }
-        if (usuario.getRol() != Rol.ADMIN) {
-            comprobarTrabajadorVigente(usuario);
-        }
-        repositorio.reactivar(idUsuario);
-        return obtener(idUsuario);
+        return TransaccionConReintentos.ejecutar(transacciones, () -> {
+            repositorio.bloquearAdministracion();
+            Usuario usuario = obtenerParaActualizar(idUsuario);
+            if (usuario.isActivo()) {
+                return usuario;
+            }
+            if (usuario.getRol() != Rol.ADMIN) {
+                comprobarTrabajadorVigente(usuario);
+            }
+            repositorio.reactivar(idUsuario);
+            return obtener(idUsuario);
+        });
     }
 
     /**
@@ -228,40 +242,41 @@ public class UsuarioService {
      * permisos se releen en cada petición, así que el cambio se aplica de
      * inmediato sin revocar los tokens.
      */
-    @Transactional
     public Usuario cambiarRol(String idUsuario, Rol nuevoRol, String idTrabajador,
                               String usernameSolicitante) {
-        String trabajador = normalizarTrabajador(idTrabajador);
-        // El cambio sobre uno mismo se descarta antes de serializar: no puede
-        // dejar el sistema sin administradores, así que no toma el bloqueo (misma
-        // regla que desactivar, pero sin necesidad de esperarlo).
-        Usuario previo = obtener(idUsuario);
-        if (previo.getUsername().equals(Usuario.normalizarUsername(usernameSolicitante))) {
-            throw new ConflictoException("No puede cambiar su propio rol.");
-        }
-        repositorio.bloquearAdministracion();
-        Usuario usuario = obtenerParaActualizar(idUsuario);
-        List<String> errores = validarVinculo(nuevoRol, trabajador);
-        if (!errores.isEmpty()) {
-            throw new SolicitudInvalidaException(errores);
-        }
-        if (nuevoRol != Rol.ADMIN) {
-            validarTrabajador(nuevoRol, trabajador, idUsuario);
-        }
-        // Guarda del último administrador activo, conservada como defensa del
-        // servicio: hoy es inalcanzable por la API (quien pide es un ADMIN activo,
-        // así que el único admin activo sería el propio solicitante y salta antes
-        // la regla del propio rol).
-        if (usuario.getRol() == Rol.ADMIN && nuevoRol != Rol.ADMIN && usuario.isActivo()
-                && repositorio.contarAdministradoresActivos() <= 1) {
-            throw new ConflictoException("No se puede quitar el rol ADMIN al último administrador activo.");
-        }
-        // La restricción UNIQUE de la base reserva el trabajador: si otro usuario lo
-        // tomó a la vez, el cambio no se aplica.
-        if (!repositorio.cambiarRol(idUsuario, nuevoRol, trabajador)) {
-            throw trabajadorOcupado(trabajador);
-        }
-        return obtener(idUsuario);
+        return TransaccionConReintentos.ejecutar(transacciones, () -> {
+            String trabajador = normalizarTrabajador(idTrabajador);
+            // El cambio sobre uno mismo se descarta antes de tomar el cerrojo: no
+            // puede dejar el sistema sin administradores (misma regla que
+            // desactivar, pero sin necesidad de esperarlo).
+            Usuario previo = obtener(idUsuario);
+            if (previo.getUsername().equals(Usuario.normalizarUsername(usernameSolicitante))) {
+                throw new ConflictoException("No puede cambiar su propio rol.");
+            }
+            repositorio.bloquearAdministracion();
+            Usuario usuario = obtenerParaActualizar(idUsuario);
+            List<String> errores = validarVinculo(nuevoRol, trabajador);
+            if (!errores.isEmpty()) {
+                throw new SolicitudInvalidaException(errores);
+            }
+            if (nuevoRol != Rol.ADMIN) {
+                validarTrabajador(nuevoRol, trabajador, idUsuario);
+            }
+            // Guarda del último administrador activo, conservada como defensa del
+            // servicio: hoy es inalcanzable por la API (quien pide es un ADMIN activo,
+            // así que el único admin activo sería el propio solicitante y salta antes
+            // la regla del propio rol).
+            if (usuario.getRol() == Rol.ADMIN && nuevoRol != Rol.ADMIN && usuario.isActivo()
+                    && repositorio.contarAdministradoresActivos() <= 1) {
+                throw new ConflictoException("No se puede quitar el rol ADMIN al último administrador activo.");
+            }
+            // El índice único del trabajador lo reserva: si otro usuario lo tomó a
+            // la vez, el cambio no se aplica.
+            if (!repositorio.cambiarRol(idUsuario, nuevoRol, trabajador)) {
+                throw trabajadorOcupado(trabajador);
+            }
+            return obtener(idUsuario);
+        });
     }
 
     /**
@@ -270,13 +285,14 @@ public class UsuarioService {
      * el siguiente acceso. Los tokens emitidos antes dejan de valer, también los
      * del propio solicitante si se restablece la suya.
      */
-    @Transactional
     public Usuario restablecerPassword(String idUsuario, String nuevaPasswordEnClaro) {
-        Usuario usuario = obtenerParaActualizar(idUsuario);
+        Usuario usuario = obtener(idUsuario);
         List<String> errores = validarPassword(nuevaPasswordEnClaro, usuario.getUsername());
         if (!errores.isEmpty()) {
             throw new SolicitudInvalidaException(errores);
         }
+        // Un único documento: la escritura lleva su condición dentro; no hace
+        // falta transacción.
         repositorio.cambiarPassword(idUsuario, passwordEncoder.encode(nuevaPasswordEnClaro), true);
         return obtener(idUsuario);
     }
@@ -286,11 +302,12 @@ public class UsuarioService {
      * sea distinta y cumpla la política, y quita el cambio pendiente. Los tokens
      * emitidos antes (incluido el de esta petición) dejan de valer.
      */
-    @Transactional
     public Usuario cambiarPasswordPropia(String idUsuario, String passwordActual, String passwordNueva) {
-        // Bloqueo de la fila: la contraseña actual se comprueba contra el hash que
-        // se va a sustituir, sin que otro cambio se cuele entre medias.
-        Usuario usuario = obtenerParaActualizar(idUsuario);
+        // El hash se lee una sola vez y la escritura solo se aplica si sigue
+        // siendo ese: otro cambio de contraseña se cuela entre medias, la
+        // escritura no se aplica y el usuario recibe el mismo aviso que con el
+        // bloqueo de fila de antes.
+        Usuario usuario = obtener(idUsuario);
         if (passwordActual == null || !passwordEncoder.matches(passwordActual, usuario.getPasswordHash())) {
             // Mensaje genérico: nunca reproduce la contraseña.
             throw new SolicitudInvalidaException("La contraseña actual no es correcta.");
@@ -302,7 +319,10 @@ public class UsuarioService {
         if (!errores.isEmpty()) {
             throw new SolicitudInvalidaException(errores);
         }
-        repositorio.cambiarPassword(idUsuario, passwordEncoder.encode(passwordNueva), false);
+        if (!repositorio.cambiarPasswordSiSigueSiendo(idUsuario, usuario.getPasswordHash(),
+                passwordEncoder.encode(passwordNueva), false)) {
+            throw new SolicitudInvalidaException("La contraseña actual no es correcta.");
+        }
         return obtener(idUsuario);
     }
 

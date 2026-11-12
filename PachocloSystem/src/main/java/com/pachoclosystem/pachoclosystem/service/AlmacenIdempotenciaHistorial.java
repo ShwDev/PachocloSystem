@@ -16,7 +16,7 @@ import java.util.function.Supplier;
 
 /**
  * Claves {@code Idempotency-Key} ya usadas al crear registros del historial. Se
- * guardan en PostgreSQL ({@link IHistorialIdempotenciaRepository}), así que
+ * guardan en MongoDB ({@link IHistorialIdempotenciaRepository}), así que
  * sobreviven a un reinicio; el cerrojo de cada clave está en la JVM (una sola
  * instancia de PachocloSystem).
  *

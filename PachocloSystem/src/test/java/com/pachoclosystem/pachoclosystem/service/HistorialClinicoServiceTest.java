@@ -77,7 +77,8 @@ class HistorialClinicoServiceTest {
     /**
      * La fecha del registro es la hora local de la zona del reloj de la
      * aplicación, no la del servidor: a las 03:00 UTC son las 22:00 del día
-     * anterior en Bogotá.
+     * anterior en Bogotá. Se trunca a milisegundos porque es la precisión con la
+     * que MongoDB guarda las fechas (BSON Date).
      */
     @Test
     void laFechaDelRegistroEsLaHoraLocalDeLaZonaDelReloj() {
@@ -91,7 +92,7 @@ class HistorialClinicoServiceTest {
         RegistroResponse registro = enBogota.agregarRegistroPaciente(p.getIdPaciente(), d.getIdTrabajador(),
                 TipoRegistro.EVOLUCION, "Paciente estable", null);
 
-        assertThat(registro.fecha()).isEqualTo(LocalDateTime.of(2026, 6, 15, 22, 0, 0, 123_456_000));
+        assertThat(registro.fecha()).isEqualTo(LocalDateTime.of(2026, 6, 15, 22, 0, 0, 123_000_000));
     }
 
     @Test

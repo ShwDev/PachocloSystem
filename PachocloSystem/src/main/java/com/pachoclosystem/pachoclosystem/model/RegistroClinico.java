@@ -1,44 +1,50 @@
 package com.pachoclosystem.pachoclosystem.model;
 
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.PersistenceCreator;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
-/**
- * Registro del historial clínico. Inmutable una vez creado: guarda una copia del
- * autor ({@link AutorRegistro}) tal como era al firmarlo.
- *
- * <p>La fecha es la hora local del {@link Clock} recibido (el de la aplicación, en
- * su zona horaria oficial) y se trunca a microsegundos, la precisión de
- * PostgreSQL: así el alta y cualquier lectura posterior devuelven exactamente la
- * misma fecha.</p>
- */
+@Document(collection = "registros_clinicos")
 public class RegistroClinico {
 
+    @Id
     private final String idRegistro;
+
+    @Indexed
+    private final String idPaciente;
+
     private final LocalDateTime fecha;
     private final AutorRegistro autor;
     private final TipoRegistro tipo;
     private final String contenido;
-    // Solo en registros de MEDICACION que descontaron stock; si no, null.
     private final String idMedicamento;
     private final Integer cantidad;
 
-    public RegistroClinico(TipoRegistro tipo, String contenido, TrabajadorHospital autor, Clock reloj) {
-        this(tipo, contenido, autor, null, null, reloj);
+    public RegistroClinico(String idPaciente, TipoRegistro tipo, String contenido, TrabajadorHospital autor, Clock reloj) {
+        this(idPaciente, tipo, contenido, autor, null, null, reloj);
     }
 
-    public RegistroClinico(TipoRegistro tipo, String contenido, TrabajadorHospital autor,
+    public RegistroClinico(String idPaciente, TipoRegistro tipo, String contenido, TrabajadorHospital autor,
                            String idMedicamento, Integer cantidad, Clock reloj) {
-        this(UUID.randomUUID().toString(), LocalDateTime.now(reloj).truncatedTo(ChronoUnit.MICROS),
+        // MongoDB guarda las fechas en milisegundos (BSON Date): se trunca aquí
+        // para que la fecha que devuelve el registro recién creado coincida con
+        // la que se lee del documento.
+        this(UUID.randomUUID().toString(), idPaciente, LocalDateTime.now(reloj).truncatedTo(ChronoUnit.MILLIS),
                 AutorRegistro.de(autor), tipo, contenido, idMedicamento, cantidad);
     }
 
-    /** Reconstruye un registro ya guardado (lo usa el repositorio). */
-    public RegistroClinico(String idRegistro, LocalDateTime fecha, AutorRegistro autor, TipoRegistro tipo,
+    /** Constructor completo: es el que usa Spring Data al leer el documento. */
+    @PersistenceCreator
+    public RegistroClinico(String idRegistro, String idPaciente, LocalDateTime fecha, AutorRegistro autor, TipoRegistro tipo,
                            String contenido, String idMedicamento, Integer cantidad) {
         this.idRegistro = idRegistro;
+        this.idPaciente = idPaciente;
         this.fecha = fecha;
         this.autor = autor;
         this.tipo = tipo;
@@ -49,6 +55,10 @@ public class RegistroClinico {
 
     public String getIdRegistro() {
         return idRegistro;
+    }
+
+    public String getIdPaciente() {
+        return idPaciente;
     }
 
     public LocalDateTime getFecha() {

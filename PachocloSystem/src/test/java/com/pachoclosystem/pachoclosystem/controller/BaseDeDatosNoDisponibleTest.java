@@ -1,5 +1,7 @@
 package com.pachoclosystem.pachoclosystem.controller;
 
+import com.mongodb.MongoTimeoutException;
+import com.mongodb.client.MongoClient;
 import com.pachoclosystem.pachoclosystem.PachocloSystemApplication;
 import com.pachoclosystem.pachoclosystem.config.AdminInicial;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
@@ -17,18 +19,18 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.datasource.DelegatingDataSource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-import javax.sql.DataSource;
-import java.net.ConnectException;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.SQLTransientConnectionException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
@@ -40,13 +42,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * PostgreSQL cae con la aplicación ya en marcha: cada petición responde 503 con
- * el cuerpo de error uniforme y sin detalles internos. Con un token válido
+ * MongoDB cae con la aplicación ya en marcha: cada petición responde 503 con el
+ * cuerpo de error uniforme y sin detalles internos. Con un token válido
  * también es 503, nunca 401: el frontend cerraría la sesión del usuario.
  *
- * <p>La caída se simula envolviendo el {@link DataSource}: mientras
- * {@link #CAIDA} está activa, pedir una conexión falla como lo hace Hikari
- * cuando la base no responde en {@code connection-timeout}.</p>
+ * <p>La caída se simula envolviendo el {@link MongoClient} con un proxy: mientras
+ * {@link #CAIDA} está activa, cualquier operación contra la base falla como
+ * cuando el driver no encuentra el servidor. Se envuelve el cliente y no la
+ * fábrica de base de datos porque el chequeo de salud de Actuator usa el
+ * {@code MongoClient} directamente: así también pasa a DOWN.</p>
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -55,26 +59,31 @@ class BaseDeDatosNoDisponibleTest {
     private static final String MENSAJE_503 =
             "El servicio no puede acceder a sus datos en este momento. Vuelva a intentarlo más tarde.";
 
+    /** Operaciones que nunca fallan: cerrar el cliente al apagar el contexto, etc. */
+    private static final Set<String> SIEMPRE_PERMITIDAS = Set.of("close", "equals", "hashCode", "toString");
+
     private static volatile boolean CAIDA;
 
     @TestConfiguration
     static class BaseQueSePuedeCaer {
 
         @Bean
-        static BeanPostProcessor envolverDataSource() {
+        static BeanPostProcessor envolverMongoClient() {
             return new BeanPostProcessor() {
                 @Override
                 public Object postProcessAfterInitialization(Object bean, String nombre) {
-                    if (bean instanceof DataSource original && !(bean instanceof DelegatingDataSource)) {
-                        return new DelegatingDataSource(original) {
-                            @Override
-                            public Connection getConnection() throws SQLException {
-                                if (CAIDA) {
-                                    throw new SQLTransientConnectionException("Base de datos caída (simulada).");
-                                }
-                                return super.getConnection();
-                            }
-                        };
+                    if (bean instanceof MongoClient original && !Proxy.isProxyClass(bean.getClass())) {
+                        return Proxy.newProxyInstance(MongoClient.class.getClassLoader(),
+                                new Class<?>[]{MongoClient.class}, (proxy, metodo, args) -> {
+                                    if (CAIDA && !SIEMPRE_PERMITIDAS.contains(metodo.getName())) {
+                                        throw new DataAccessResourceFailureException("Base de datos caída (simulada).");
+                                    }
+                                    try {
+                                        return metodo.invoke(original, args);
+                                    } catch (InvocationTargetException causa) {
+                                        throw causa.getCause();
+                                    }
+                                });
                     }
                     return bean;
                 }
@@ -98,7 +107,7 @@ class BaseDeDatosNoDisponibleTest {
 
     @BeforeEach
     void caerLaBase() {
-        // Otro contexto de test pudo recrear el esquema: el admin se crea si falta.
+        // Otro contexto de test pudo limpiar la base: el admin se crea si falta.
         if (!repositorio.existePorUsername("admin")) {
             adminInicial.run(new DefaultApplicationArguments());
         }
@@ -119,7 +128,7 @@ class BaseDeDatosNoDisponibleTest {
                 .andExpect(jsonPath("$.mensajes[0]").value(MENSAJE_503))
                 .andExpect(header().doesNotExist(HttpHeaders.WWW_AUTHENTICATE))
                 .andExpect(content().string(not(containsString("Exception"))))
-                .andExpect(content().string(not(containsString("SQL"))));
+                .andExpect(content().string(not(containsString("mongodb"))));
     }
 
     @Test
@@ -169,13 +178,18 @@ class BaseDeDatosNoDisponibleTest {
     void sinBaseDeDatosLaAplicacionNoArranca() {
         CAIDA = false;
         // Como argumentos de línea de comandos: tienen prioridad sobre la
-        // configuración de los tests, que apunta a la base real.
+        // configuración de los tests. Con auto-index-creation el contexto conecta
+        // al arrancar y, si no hay servidor, no se crea.
         assertThatThrownBy(() -> new SpringApplicationBuilder(PachocloSystemApplication.class)
                 .web(WebApplicationType.SERVLET)
                 .run("--server.port=0",
-                        "--spring.datasource.url=jdbc:postgresql://127.0.0.1:1/pachoclosystem_test",
-                        "--spring.datasource.hikari.connection-timeout=500")
+                        "--spring.mongodb.uri=mongodb://127.0.0.1:1/pachoclosystem_test?serverSelectionTimeoutMS=1000",
+                        "--spring.mongodb.auto-index-creation=true")
                 .close())
-                .hasRootCauseInstanceOf(ConnectException.class);
+                .satisfies(error -> {
+                    Throwable causa = NestedExceptionUtils.getMostSpecificCause(error);
+                    assertThat(causa).isInstanceOf(MongoTimeoutException.class);
+                    assertThat(causa.getMessage()).contains("Connection refused");
+                });
     }
 }

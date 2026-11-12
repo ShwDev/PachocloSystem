@@ -12,6 +12,9 @@ import com.pachoclosystem.pachoclosystem.security.AuthService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpHeaders;
 
 import java.util.ArrayList;
@@ -28,11 +31,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Concurrencia contra PostgreSQL real: las garantías que antes daban los
- * cerrojos de la JVM y los mapas concurrentes ahora las dan las transacciones,
- * los bloqueos de fila, el advisory lock y las restricciones de la base.
+ * Concurrencia contra MongoDB real: las garantías que antes daban los cerrojos
+ * de la JVM ahora las dan los índices únicos, las escrituras atómicas con
+ * guardas en la consulta y el cerrojo administrativo transaccional.
  */
-class ConcurrenciaPostgresTest extends MockMvcBaseTest {
+class ConcurrenciaMongoTest extends MockMvcBaseTest {
 
     private static final String PASSWORD_A = "password-segura-aaaa1";
     private static final String PASSWORD_B = "password-segura-bbbb2";
@@ -96,7 +99,8 @@ class ConcurrenciaPostgresTest extends MockMvcBaseTest {
     @Test
     void dosAdministradoresQueSeDesactivanALaVezNoDejanElSistemaSinAdministradores() throws Exception {
         // Sin el admin de los tests, uno y dos son los únicos administradores activos.
-        jdbc.sql("UPDATE usuarios SET activo = FALSE WHERE rol = 'ADMIN'").update();
+        mongoTemplate.updateMulti(new Query(Criteria.where("rol").is(Rol.ADMIN)),
+                new Update().set("activo", false), Usuario.class);
         for (int ronda = 0; ronda < 20; ronda++) {
             Usuario uno = usuarioService.crearUsuario("admin.uno." + ronda, PASSWORD_A, Rol.ADMIN, null);
             Usuario dos = usuarioService.crearUsuario("admin.dos." + ronda, PASSWORD_A, Rol.ADMIN, null);
@@ -110,8 +114,8 @@ class ConcurrenciaPostgresTest extends MockMvcBaseTest {
             b.get(10, TimeUnit.SECONDS);
 
             assertThat(repositorioUsuarios.contarAdministradoresActivos()).isEqualTo(1);
-            jdbc.sql("UPDATE usuarios SET activo = FALSE WHERE id_usuario IN (:ids)")
-                    .param("ids", List.of(uno.getIdUsuario(), dos.getIdUsuario())).update();
+            mongoTemplate.updateMulti(new Query(Criteria.where("_id").in(uno.getIdUsuario(), dos.getIdUsuario())),
+                    new Update().set("activo", false), Usuario.class);
         }
     }
 

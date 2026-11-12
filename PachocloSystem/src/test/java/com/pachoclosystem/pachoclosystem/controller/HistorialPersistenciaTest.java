@@ -2,7 +2,7 @@ package com.pachoclosystem.pachoclosystem.controller;
 
 import com.pachoclosystem.pachoclosystem.dto.RegistroResponse;
 import com.pachoclosystem.pachoclosystem.model.Rol;
-import com.pachoclosystem.pachoclosystem.repository.HistorialIdempotenciaRepositoryJdbc;
+import com.pachoclosystem.pachoclosystem.repository.HistorialIdempotenciaRepositoryMongo;
 import com.pachoclosystem.pachoclosystem.repository.IHistorialIdempotenciaRepository;
 import com.pachoclosystem.pachoclosystem.service.AlmacenIdempotenciaHistorial;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Registros clínicos y claves de idempotencia guardados en PostgreSQL: la copia
+ * Registros clínicos y claves de idempotencia guardados en MongoDB: la copia
  * del autor, la fecha exacta, la caducidad de las claves y la atomicidad entre el
  * registro y su clave.
  */
@@ -45,7 +45,7 @@ class HistorialPersistenciaTest extends MockMvcBaseTest {
     private static final String EVOLUCION = "{\"tipo\":\"EVOLUCION\",\"contenido\":\"Paciente estable\"}";
 
     @MockitoSpyBean
-    private HistorialIdempotenciaRepositoryJdbc repositorioIdempotencia;
+    private HistorialIdempotenciaRepositoryMongo repositorioIdempotencia;
 
     private ResultActions postConClave(String trabajador, String paciente, String clave) throws Exception {
         return mockMvc.perform(post("/api/pacientes/{id}/historial", paciente)
@@ -139,7 +139,7 @@ class HistorialPersistenciaTest extends MockMvcBaseTest {
     }
 
     @Test
-    void unaClaveGuardadaEnPostgresCaducaALas24Horas() {
+    void unaClaveGuardadaEnMongoCaducaALas24Horas() {
         Instant inicio = Instant.parse("2026-06-15T10:00:00Z");
         RegistroResponse registro = new RegistroResponse("reg-1", "PAC-0001", "Ana Torres", null,
                 null, null, "Paciente estable", null);
@@ -159,6 +159,6 @@ class HistorialPersistenciaTest extends MockMvcBaseTest {
 
         // Al guardar otra clave se purga la caducada.
         unDia.guardar("otra-clave-0000000", "USR-0001", "PAC-0001", "h".repeat(64), null);
-        assertThat(jdbc.sql("SELECT count(*) FROM historial_idempotencia").query(Long.class).single()).isEqualTo(1);
+        assertThat(mongoTemplate.count(new org.springframework.data.mongodb.core.query.Query(), "historial_idempotencia")).isEqualTo(1);
     }
 }

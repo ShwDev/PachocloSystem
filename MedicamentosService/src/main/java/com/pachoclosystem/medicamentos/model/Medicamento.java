@@ -1,22 +1,42 @@
 package com.pachoclosystem.medicamentos.model;
 
 import com.pachoclosystem.medicamentos.exception.SolicitudInvalidaException;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDate;
 
+/**
+ * Medicamento en la colección {@code medicamentos}.
+ *
+ * <p>La unicidad de nombre + concentración + presentación + lote la decide el
+ * índice único sobre {@code claveUnica}, que guarda
+ * {@link DatosMedicamento#claveUnica()}: la normalización es la de Java. El
+ * campo se mantiene junto a los datos (se recalcula al sustituirlos), así el
+ * índice no depende de las subclaves de {@code datos}.</p>
+ */
+@Document(collection = "medicamentos")
 public class Medicamento {
 
+    @Id
     private final String idMedicamento;
+
+    /** Clave de unicidad de negocio, persistida para el índice único. */
+    @Indexed(unique = true)
+    private volatile String claveUnica;
+
     private volatile DatosMedicamento datos;
     private volatile int cantidadStock;
 
     public Medicamento(String idMedicamento, DatosMedicamento datos, int cantidadStock) {
         this.idMedicamento = idMedicamento;
+        this.claveUnica = datos.claveUnica();
         this.datos = datos;
         this.cantidadStock = cantidadStock;
     }
 
-    /** Suma unidades al stock. */
+    /** Suma unidades al stock (doble en memoria del guard del repositorio). */
     public synchronized void ingresarStock(int cantidad) {
         try {
             cantidadStock = Math.addExact(cantidadStock, cantidad);
@@ -26,10 +46,8 @@ public class Medicamento {
     }
 
     /**
-     * Resta unidades del stock si alcanzan. Entre peticiones, lo que impide que
-     * dos salidas simultáneas dejen el stock en negativo es el bloqueo de fila
-     * con el que {@code MedicamentoService} lee el medicamento; la restricción
-     * {@code cantidad_stock >= 0} de la base es la última defensa.
+     * Resta unidades del stock si alcanzan (doble en memoria del guard del
+     * repositorio).
      */
     public synchronized void retirarStock(int cantidad) {
         if (cantidad > cantidadStock) {
@@ -55,9 +73,14 @@ public class Medicamento {
         return datos;
     }
 
-    /** Lo usa el repositorio, que es quien garantiza la unicidad de los datos. */
+    /** Sustituye los datos descriptivos y recalcula la clave de unicidad. */
     public void setDatos(DatosMedicamento datos) {
+        this.claveUnica = datos.claveUnica();
         this.datos = datos;
+    }
+
+    public String getClaveUnica() {
+        return claveUnica;
     }
 
     public int getCantidadStock() {

@@ -17,7 +17,7 @@ class PerfilProduccionArranqueTest {
 
     @Test
     void conElPerfilProdYSinSecretosNoArranca() {
-        String passwordBd = System.getenv("PACHOCLOSYSTEM_TEST_DB_PASSWORD");
+        String uriMongo = System.getenv("SPRING_MONGODB_URI");
         assertThatThrownBy(() -> new SpringApplicationBuilder(PachocloSystemApplication.class)
                 .run("--spring.profiles.active=prod", "--server.port=0")
                 .close())
@@ -26,10 +26,10 @@ class PerfilProduccionArranqueTest {
                     assertThat(causa).isInstanceOf(IllegalStateException.class);
                     assertThat(causa.getMessage())
                             .contains("Configuración de producción incompleta (perfil prod)")
-                            .contains("MEDICAMENTOS_API_KEY", "MEDICAMENTOS_URL", "PACHOCLOSYSTEM_DB_URL", "CORS_ORIGENES")
+                            .contains("MEDICAMENTOS_API_KEY", "MEDICAMENTOS_URL", "SPRING_MONGODB_URI", "CORS_ORIGENES")
                             .doesNotContain("clave-jwt-de-prueba-para-tests-1234567890abcd", "pwd-de-prueba-solo-tests-12345");
-                    if (passwordBd != null && !passwordBd.isBlank()) {
-                        assertThat(causa.getMessage()).doesNotContain(passwordBd);
+                    if (uriMongo != null && !uriMongo.isBlank()) {
+                        assertThat(causa.getMessage()).doesNotContain(uriMongo);
                     }
                 });
     }

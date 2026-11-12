@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * Registros del historial clínico. La implementación de la aplicación es
- * {@link RegistroClinicoRepositoryJdbc} (PostgreSQL).
+ * {@link RegistroClinicoRepositoryMongo} (MongoDB).
  */
 public interface IRegistroClinicoRepository {
 

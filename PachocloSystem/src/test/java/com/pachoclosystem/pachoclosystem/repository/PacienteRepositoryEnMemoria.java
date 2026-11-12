@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * Doble en memoria de {@link IPacienteRepository} para los tests unitarios, sin
- * base de datos. Reproduce el contrato de {@link PacienteRepositoryJdbc}.
+ * base de datos. Reproduce el contrato de {@link PacienteRepositoryMongo}.
  */
 public class PacienteRepositoryEnMemoria implements IPacienteRepository {
 

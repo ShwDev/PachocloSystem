@@ -7,72 +7,73 @@ Migrada desde una aplicación Swing con arquitectura MVC.
 
 - **Java 25** (`JAVA_HOME` debe apuntar a un JDK 25; el `pom.xml` fija `java.version=25`).
 - No hace falta instalar Maven: se usa el wrapper incluido.
-- **PostgreSQL** (probado con la 18) con las bases `pachoclosystem` y `pachoclosystem_test` (ver
-  [Base de datos](#base-de-datos)).
+- **MongoDB 8** con un **replica set** (aunque sea de un solo nodo): las transacciones del cerrojo
+  administrativo y del historial lo necesitan (ver [Base de datos](#base-de-datos)).
 
 ## Cómo arrancar
 
 ```bash
-./mvnw spring-boot:run        # Linux / macOS / Git Bash
-mvnw.cmd spring-boot:run      # Windows (cmd / PowerShell)
+SPRING_MONGODB_URI='mongodb://localhost:27017/pachoclosystem?replicaSet=rs0' ./mvnw spring-boot:run
+```
+
+```powershell
+$env:SPRING_MONGODB_URI = "mongodb://localhost:27017/pachoclosystem?replicaSet=rs0"
+.\mvnw.cmd spring-boot:run
 ```
 
 La API queda en `http://localhost:8080`. Otros comandos útiles:
 
 ```bash
 ./mvnw clean compile          # compilar
-./mvnw test                   # ejecutar pruebas
+./mvnw test                   # ejecutar pruebas (Testcontainers arranca su MongoDB)
 ```
 
-Sin `PACHOCLOSYSTEM_DB_PASSWORD` (o sin PostgreSQL) la aplicación no arranca.
+Sin MongoDB accesible la aplicación no arranca: crea los índices al arrancar.
 
 ## Base de datos
 
-PostgreSQL, con las tablas creadas por **Flyway** al arrancar (`src/main/resources/db/migration`):
+MongoDB, con una colección por concepto. Los índices los crea el servicio al arrancar (no hay
+migraciones manuales):
 
-| Migración | Tabla | Contenido |
-|---|---|---|
-| `V1` | `pacientes` | Un paciente por fila; `activo = false` es la baja lógica. Ids `PAC-0001` de la secuencia `pacientes_id_seq` |
-| `V2` | `trabajadores` | Doctores y enfermeros en una tabla con la columna `tipo`. Ids `DOC-0001` y `ENF-0001` de sus propias secuencias |
-| `V3` | `usuarios` | Username único, hash BCrypt, versión de token, cambio de contraseña pendiente, rol y trabajador vinculado (único, sin clave foránea). Ids `USR-0001` |
-| `V4` | `registros_clinicos` | El historial. Cada registro guarda una **copia del autor** tal como era al firmarlo (sin clave foránea al trabajador) |
-| `V5` | `historial_idempotencia` | Claves `Idempotency-Key` del historial con el registro creado (JSONB) o sin él si el resultado fue incierto |
+| Colección | Contenido |
+|---|---|
+| `pacientes` | Un documento por paciente; `activo = false` es la baja lógica. Ids `PAC-0001` de la colección `secuencias` (`pacientes_id_seq`) |
+| `trabajadores` | Doctores y enfermeros en una colección con el campo `tipo`. Ids `DOC-0001` y `ENF-0001` de sus propias secuencias |
+| `usuarios` | Username único (índice único), hash BCrypt, versión del token, cambio de contraseña pendiente, rol e `idTrabajador` único (índice único disperso: los usuarios sin trabajador no cuentan). Ids `USR-0001` |
+| `registros_clinicos` | El historial. Cada registro guarda una **copia del autor** tal como era al firmarlo (sin referencia viva al trabajador); índice por `idPaciente` |
+| `historial_idempotencia` | Claves `Idempotency-Key` del historial con el registro creado o sin él si el resultado fue incierto; índice por `usadaEn` para purgar |
+| `secuencias` | Contadores de los ids (`pacientes_id_seq`, `doctores_id_seq`, `enfermeros_id_seq`, `usuarios_id_seq`) |
+| `cerrojos` | Documento `administracion` que serializa desactivar, activar y cambiar de rol: las operaciones administrativas lo tocan dentro de su transacción |
 
 | Variable de entorno | Propiedad | Por defecto |
 |---|---|---|
-| `PACHOCLOSYSTEM_DB_URL` | `spring.datasource.url` | `jdbc:postgresql://localhost:5432/pachoclosystem` |
-| `PACHOCLOSYSTEM_DB_USER` | `spring.datasource.username` | `pachoclosystem_app` |
-| `PACHOCLOSYSTEM_DB_PASSWORD` | `spring.datasource.password` | *(sin valor en el repo)* |
-| `PACHOCLOSYSTEM_DB_POOL` | `spring.datasource.hikari.maximum-pool-size` | `10` |
+| `SPRING_MONGODB_URI` | `spring.mongodb.uri` | `mongodb://localhost:27017/pachoclosystem` |
 
-Los tests usan **otra base**, `pachoclosystem_test` (`PACHOCLOSYSTEM_TEST_DB_URL`,
-`PACHOCLOSYSTEM_TEST_DB_USER` y `PACHOCLOSYSTEM_TEST_DB_PASSWORD`, en
-`src/test/resources/config/application.properties`, que se suma a la configuración principal).
-Cada contexto de Spring de los tests arranca con el esquema recreado y los tests MockMvc la vacían
-antes de cada prueba. Por seguridad se niegan a
-tocar una base cuyo nombre no termine en `_test`.
+La base va **dentro de la URI**. Sin `replicaSet` las transacciones de MongoDB fallan al confirmar.
+En producción use un usuario y contraseña en la cadena (`mongodb+srv://…` en Atlas).
 
-Para crear las dos bases en un PostgreSQL local, como superusuario (cambie la contraseña):
-
-```sql
-CREATE ROLE pachoclosystem_app LOGIN PASSWORD '<contraseña>';
-CREATE DATABASE pachoclosystem OWNER pachoclosystem_app ENCODING 'UTF8' TEMPLATE template0;
-CREATE DATABASE pachoclosystem_test OWNER pachoclosystem_app ENCODING 'UTF8' TEMPLATE template0;
-```
+Los tests no usan una base externa: **Testcontainers** arranca un MongoDB de un nodo con replica set
+al abrir la sesión de JUnit, antes de crear los contextos de Spring. Solo hace falta Docker. Cada
+prueba vacía las colecciones y conserva los índices (nunca borra las colecciones). Por seguridad, la
+limpieza se niega a tocar una base cuyo nombre no termine en `_test`.
 
 **Transacciones y concurrencia.** Las reglas que antes dependían de cerrojos en memoria las aplica
 ahora la base:
 
-- Username y trabajador vinculado únicos: restricciones `UNIQUE` (dos altas simultáneas, un `409`).
-- Último administrador activo: desactivar, activar y cambiar de rol van en una transacción con un
-  *advisory lock* de PostgreSQL y el usuario bloqueado (`FOR UPDATE`).
-- Cambios de contraseña: el usuario se bloquea (`FOR UPDATE`) y hash y versión de token cambian en un
-  solo `UPDATE`; el login lee hash y versión en una sola consulta, así que un login simultáneo con la
+- Username y trabajador vinculado únicos: índices únicos (dos altas simultáneas: una recibe `409`).
+- Último administrador activo: desactivar, activar y cambiar de rol van en una transacción que toca
+  el documento `cerrojos/administracion`. Dos operaciones simultáneas chocan (conflicto de
+  escritura); la que pierde se reintenta, vuelve a leer el estado y responde `409` si ya no queda
+  otro administrador activo.
+- Cambios de contraseña: un solo `updateFirst` con el hash esperado en la consulta y `$inc` de la
+  versión del token; el login lee hash y versión juntos, así que un login simultáneo con la
   contraseña anterior nunca deja un token válido.
-- Editar, cambiar de habitación y dar de baja un paciente son un único `UPDATE ... WHERE activo`.
-- El registro clínico y su clave de idempotencia se guardan en la **misma transacción**; la salida de
-  stock en MedicamentosService se pide antes, fuera de la transacción.
-- Esperas acotadas: `connection-timeout` de 3 s y `lock_timeout` de 3 s.
+- Editar, cambiar de habitación y dar de baja un paciente son un único `updateFirst` con
+  `activo: true` en la consulta.
+- El registro clínico y su clave de idempotencia se guardan en la **misma transacción** de MongoDB;
+  la salida de stock en MedicamentosService se pide antes, fuera de la transacción.
+- Solo se reintenta lo que MongoDB marca como transitorio (conflicto de escritura o commit
+  incierto), con un presupuesto acotado (10 s); el resto de errores se propaga tal cual.
 
 **Base de datos no disponible.** Con la aplicación en marcha, cualquier petición responde `503`
 "El servicio no puede acceder a sus datos en este momento. Vuelva a intentarlo más tarde.", también
@@ -87,8 +88,9 @@ Los valores por defecto son de **desarrollo**. En producción se arranca con el 
   error enumera todo lo que falta, con el nombre de cada variable y nunca su valor:
   - `JWT_SECRET` (mínimo 32 bytes);
   - `MEDICAMENTOS_API_KEY` (mínimo 32 caracteres, la misma en MedicamentosService);
-  - `MEDICAMENTOS_URL` y `PACHOCLOSYSTEM_DB_URL` que no apunten a localhost;
-  - `PACHOCLOSYSTEM_DB_PASSWORD`;
+  - `MEDICAMENTOS_URL` que no apunte a localhost;
+  - `SPRING_MONGODB_URI` definida y que no apunte a localhost (admite listas de hosts y
+    `mongodb+srv://`);
   - `CORS_ORIGENES` con el origen https del frontend;
   - `ADMIN_PASSWORD` mientras el administrador no exista (no se genera una aleatoria que quedaría
     en el log).
@@ -120,10 +122,10 @@ expuesto):
 src/main/java/com/pachoclosystem/pachoclosystem/
 ├── controller/   endpoints REST
 ├── service/      lógica de negocio y validaciones
-├── repository/   acceso a PostgreSQL (JdbcClient)
+├── repository/   acceso a MongoDB (MongoTemplate) y secuencias
 ├── model/        entidades (Paciente, Doctor, Enfermero, RegistroClinico, Usuario, Rol, ...)
 ├── dto/          requests y responses
-├── config/       configuración (seguridad, JWT, PasswordEncoder, admin inicial y cliente de medicamentos)
+├── config/       configuración (seguridad, JWT, PasswordEncoder, transacciones, admin inicial y cliente de medicamentos)
 ├── security/     JWT, entry point 401/403 y login
 ├── client/       cliente HTTP de MedicamentosService
 └── exception/    errores y @RestControllerAdvice
@@ -248,7 +250,7 @@ curl -X POST localhost:8080/api/pacientes/PAC-0001/historial \
 - **Sin la cabecera**, todo funciona exactamente como antes (sin reintentos y con los mismos
   mensajes).
 
-Las claves se guardan en **PostgreSQL** (tabla `historial_idempotencia`), así que sobreviven a los
+Las claves se guardan en **MongoDB** (colección `historial_idempotencia`), así que sobreviven a los
 reinicios; el registro y su clave se guardan juntos o no se guarda ninguno. Las peticiones con la
 misma clave se ordenan con un cerrojo en la JVM, por lo que se asume **una sola instancia** de
 PachocloSystem.
@@ -260,7 +262,7 @@ PachocloSystem.
 No hay tope de claves: las caducadas se borran al guardar una nueva. Una clave caducada se trata
 como nueva. "Sin riesgo de descontar dos veces" se cumple
 mientras MedicamentosService recuerde la clave: 24 h por defecto. MedicamentosService las guarda en
-PostgreSQL, así que sobreviven a sus reinicios.
+MongoDB, así que sobreviven a sus reinicios.
 
 **Para el frontend (cliente de la API), lo que cambia:**
 
@@ -367,11 +369,12 @@ descontado sin registro:
 
 ```bash
 # Terminal 1
-cd MedicamentosService && MEDICAMENTOS_API_KEY=<clave-del-servicio> MEDICAMENTOS_DB_PASSWORD=<contraseña> \
-  ./mvnw spring-boot:run
+cd MedicamentosService && MEDICAMENTOS_API_KEY=<clave-del-servicio> \
+  SPRING_MONGODB_URI='mongodb://localhost:27017/medicamentos?replicaSet=rs0' ./mvnw spring-boot:run
 # Terminal 2
 cd PachocloSystem && MEDICAMENTOS_API_KEY=<clave-del-servicio> ADMIN_PASSWORD=<contraseña-admin> \
-  JWT_SECRET=<secreto-jwt-32-bytes> PACHOCLOSYSTEM_DB_PASSWORD=<contraseña> ./mvnw spring-boot:run
+  JWT_SECRET=<secreto-jwt-32-bytes> \
+  SPRING_MONGODB_URI='mongodb://localhost:27017/pachoclosystem?replicaSet=rs0' ./mvnw spring-boot:run
 
 # Terminal 3: login y llamadas
 TOKEN=$(curl -s -X POST localhost:8080/api/auth/login -H 'Content-Type: application/json' \
@@ -387,7 +390,7 @@ curl localhost:8081/api/medicamentos                                     # 401: 
 ## Usuarios, roles y autenticación
 
 Modelo de usuarios (`Rol`: `ADMIN`, `DOCTOR`, `ENFERMERO`; entidad `Usuario`,
-repositorio en PostgreSQL, servicio con reglas de negocio) y creación de un
+repositorio en MongoDB, servicio con reglas de negocio) y creación de un
 administrador inicial al arrancar. La autenticación es **stateless con JWT**:
 todos los endpoints de `/api/**`, salvo el login, exigen un token bearer
 válido, y cada operación exige un rol (ver [Permisos por rol](#permisos-por-rol)).
@@ -535,7 +538,7 @@ curl -X POST http://localhost:8080/api/usuarios   -H "Authorization: Bearer <tok
   la nueva sea distinta y cumpla la política (`400` si no); responde `204`,
   quita el cambio pendiente y revoca el token usado: hay que volver a iniciar
   sesión.
-- Los usuarios se guardan en PostgreSQL y sobreviven a los reinicios; un
+- Los usuarios se guardan en MongoDB y sobreviven a los reinicios; un
   token sigue valiendo tras un reinicio si `JWT_SECRET` no cambia.
 
 ### Variables de entorno del administrador inicial
