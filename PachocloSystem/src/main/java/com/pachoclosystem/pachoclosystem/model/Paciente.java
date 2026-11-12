@@ -1,6 +1,7 @@
 package com.pachoclosystem.pachoclosystem.model;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.PersistenceCreator;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 /**
@@ -20,6 +21,11 @@ public class Paciente {
         this(idPaciente, nombre, edad, habitacion, true);
     }
 
+    /**
+     * Constructor completo: es el que usa Spring Data al leer el documento
+     * (tiene varios constructores y ninguno puede deducirse como canónico).
+     */
+    @PersistenceCreator
     public Paciente(String idPaciente, String nombre, int edad, int habitacion, boolean activo) {
         this.idPaciente = idPaciente;
         this.nombre = nombre;

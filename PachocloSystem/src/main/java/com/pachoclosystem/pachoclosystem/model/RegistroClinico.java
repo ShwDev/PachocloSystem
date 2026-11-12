@@ -1,6 +1,7 @@
 package com.pachoclosystem.pachoclosystem.model;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.PersistenceCreator;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -31,10 +32,15 @@ public class RegistroClinico {
 
     public RegistroClinico(String idPaciente, TipoRegistro tipo, String contenido, TrabajadorHospital autor,
                            String idMedicamento, Integer cantidad, Clock reloj) {
-        this(UUID.randomUUID().toString(), idPaciente, LocalDateTime.now(reloj).truncatedTo(ChronoUnit.MICROS),
+        // MongoDB guarda las fechas en milisegundos (BSON Date): se trunca aquí
+        // para que la fecha que devuelve el registro recién creado coincida con
+        // la que se lee del documento.
+        this(UUID.randomUUID().toString(), idPaciente, LocalDateTime.now(reloj).truncatedTo(ChronoUnit.MILLIS),
                 AutorRegistro.de(autor), tipo, contenido, idMedicamento, cantidad);
     }
 
+    /** Constructor completo: es el que usa Spring Data al leer el documento. */
+    @PersistenceCreator
     public RegistroClinico(String idRegistro, String idPaciente, LocalDateTime fecha, AutorRegistro autor, TipoRegistro tipo,
                            String contenido, String idMedicamento, Integer cantidad) {
         this.idRegistro = idRegistro;
