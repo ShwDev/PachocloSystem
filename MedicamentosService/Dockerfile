@@ -10,12 +10,10 @@ WORKDIR /build
 # Primero lo que cambia poco (wrapper y pom) para aprovechar la caché de capas.
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN --mount=type=cache,id=s/21bd3c6c-80f4-47c4-866c-c701ef52dce7-/root/.m2,target=/root/.m2 \
-    chmod +x mvnw && ./mvnw -B -ntp dependency:go-offline
+RUN chmod +x mvnw && ./mvnw -B -ntp dependency:go-offline
 
 COPY src/ src/
-RUN --mount=type=cache,id=s/21bd3c6c-80f4-47c4-866c-c701ef52dce7-/root/.m2,target=/root/.m2 \
-    ./mvnw -B -ntp -DskipTests package \
+RUN ./mvnw -B -ntp -DskipTests package \
     && cp target/*.jar app.jar
 
 # ---- Etapa 2: ejecutar ----
