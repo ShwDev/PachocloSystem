@@ -2,35 +2,41 @@ package com.pachoclosystem.medicamentos.model;
 
 import com.pachoclosystem.medicamentos.exception.SolicitudInvalidaException;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDate;
 
 /**
- * Entidad principal de Medicamento mapeada como Documento MongoDB en la colección "medicamentos".
- * Se incluye un índice compuesto único para replicar la restricción de negocio (nombre + concentración + presentación + lote).
+ * Medicamento en la colección {@code medicamentos}.
+ *
+ * <p>La unicidad de nombre + concentración + presentación + lote la decide el
+ * índice único sobre {@code claveUnica}, que guarda
+ * {@link DatosMedicamento#claveUnica()}: la normalización es la de Java. El
+ * campo se mantiene junto a los datos (se recalcula al sustituirlos), así el
+ * índice no depende de las subclaves de {@code datos}.</p>
  */
 @Document(collection = "medicamentos")
-@CompoundIndex(
-    name = "idx_medicamento_clave_unica", 
-    def = "{'datos.nombre': 1, 'datos.concentracion': 1, 'datos.presentacion': 1, 'datos.lote': 1}", 
-    unique = true
-)
 public class Medicamento {
 
     @Id
     private final String idMedicamento;
+
+    /** Clave de unicidad de negocio, persistida para el índice único. */
+    @Indexed(unique = true)
+    private volatile String claveUnica;
+
     private volatile DatosMedicamento datos;
     private volatile int cantidadStock;
 
     public Medicamento(String idMedicamento, DatosMedicamento datos, int cantidadStock) {
         this.idMedicamento = idMedicamento;
+        this.claveUnica = datos.claveUnica();
         this.datos = datos;
         this.cantidadStock = cantidadStock;
     }
 
-    /** Suma unidades al stock. */
+    /** Suma unidades al stock (doble en memoria del guard del repositorio). */
     public synchronized void ingresarStock(int cantidad) {
         try {
             cantidadStock = Math.addExact(cantidadStock, cantidad);
@@ -40,7 +46,8 @@ public class Medicamento {
     }
 
     /**
-     * Resta unidades del stock si alcanzan.
+     * Resta unidades del stock si alcanzan (doble en memoria del guard del
+     * repositorio).
      */
     public synchronized void retirarStock(int cantidad) {
         if (cantidad > cantidadStock) {
@@ -66,8 +73,14 @@ public class Medicamento {
         return datos;
     }
 
+    /** Sustituye los datos descriptivos y recalcula la clave de unicidad. */
     public void setDatos(DatosMedicamento datos) {
+        this.claveUnica = datos.claveUnica();
         this.datos = datos;
+    }
+
+    public String getClaveUnica() {
+        return claveUnica;
     }
 
     public int getCantidadStock() {

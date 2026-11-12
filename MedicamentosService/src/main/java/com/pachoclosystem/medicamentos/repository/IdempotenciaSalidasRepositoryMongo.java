@@ -1,17 +1,30 @@
 package com.pachoclosystem.medicamentos.repository;
 
 import com.pachoclosystem.medicamentos.dto.MedicamentoResponse;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.Optional;
 
+/**
+ * Claves de idempotencia en la colección {@code idempotencia_salidas}, una por
+ * salida hecha ({@code _id} es la clave).
+ *
+ * <p>No hay bloqueo por clave: dos peticiones simultáneas con la misma clave
+ * hacen su descuento en su propia transacción y luego compiten por el
+ * documento; la que llega segunda no puede insertar (el índice único del
+ * {@code _id} lo impide), recibe {@link SalidaYaVigente} y su transacción se
+ * aborta (su descuento se deshace). Al reintentar ya encuentra la salida de
+ * la primera y responde con ella, sin descontar dos veces.</p>
+ */
 @Repository
 public class IdempotenciaSalidasRepositoryMongo implements IdempotenciaSalidasRepository {
 
@@ -19,11 +32,6 @@ public class IdempotenciaSalidasRepositoryMongo implements IdempotenciaSalidasRe
 
     public IdempotenciaSalidasRepositoryMongo(MongoTemplate mongoTemplate) {
         this.mongoTemplate = mongoTemplate;
-    }
-
-    @Override
-    public void bloquear(String clave) {
-        // En MongoDB las operaciones atómicas a nivel de documento reemplazan la necesidad de advisory locks relacionales.
     }
 
     @Override
@@ -41,13 +49,27 @@ public class IdempotenciaSalidasRepositoryMongo implements IdempotenciaSalidasRe
     @Override
     public void guardar(String clave, String idMedicamento, int cantidad, MedicamentoResponse respuesta,
                         Instant hechaEn, Instant limite) {
-        Query queryExistente = new Query(Criteria.where("_id").is(clave).and("hechaEn").gt(limite));
-        if (mongoTemplate.exists(queryExistente, IdempotenciaSalidaDocument.class)) {
-            throw new IllegalStateException("La clave de idempotencia ya tiene una salida vigente.");
+        // 1. Sustituir solo una clave caducada (hechaEn anterior o igual a
+        //    limite): la sustitución y su condición son la misma operación.
+        Query caducada = new Query(Criteria.where("_id").is(clave).and("hechaEn").lte(limite));
+        Update sustituir = new Update()
+                .set("idMedicamento", idMedicamento)
+                .set("cantidad", cantidad)
+                .set("respuesta", respuesta)
+                .set("hechaEn", hechaEn);
+        if (mongoTemplate.updateFirst(caducada, sustituir, IdempotenciaSalidaDocument.class)
+                .getMatchedCount() > 0) {
+            return;
         }
 
-        IdempotenciaSalidaDocument doc = new IdempotenciaSalidaDocument(clave, idMedicamento, cantidad, respuesta, hechaEn);
-        mongoTemplate.save(doc);
+        // 2. No había clave (o no era reemplazable): insertar. Si otra petición
+        //    con la misma clave la insertó antes, el índice único del _id lo
+        //    impide y se marca la carrera.
+        try {
+            mongoTemplate.insert(new IdempotenciaSalidaDocument(clave, idMedicamento, cantidad, respuesta, hechaEn));
+        } catch (DuplicateKeyException ocupada) {
+            throw new SalidaYaVigente("La clave de idempotencia ya tiene una salida vigente.");
+        }
     }
 
     @Override

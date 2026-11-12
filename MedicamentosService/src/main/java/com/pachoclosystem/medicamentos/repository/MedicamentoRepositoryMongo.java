@@ -4,14 +4,33 @@ import com.pachoclosystem.medicamentos.model.DatosMedicamento;
 import com.pachoclosystem.medicamentos.model.Medicamento;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Medicamentos en la colección {@code medicamentos}.
+ *
+ * <ul>
+ *   <li>La unicidad de nombre + concentración + presentación + lote la decide el
+ *       índice único sobre {@code claveUnica}, que guarda
+ *       {@link DatosMedicamento#claveUnica()}: la normalización es la de Java.</li>
+ *   <li>El id sale de la secuencia {@code medicamentos_id_seq} con el formato
+ *       {@code MED-0001}. Un alta que falla también consume su número.</li>
+ *   <li>Las entradas y salidas de stock no leen el medicamento para luego
+ *       escribirlo: cada una es un único {@code findAndModify} atómico con sus
+ *       condiciones dentro de la consulta (comprobar y escribir en el mismo
+ *       paso), así que dos salidas simultáneas nunca dejan el stock en negativo
+ *       ni se pierde una actualización, aunque haya varias instancias del
+ *       servicio. Por eso no hace falta transacción ni bloqueo.</li>
+ * </ul>
+ */
 @Repository
 public class MedicamentoRepositoryMongo implements IMedicamentoRepository {
 
@@ -44,13 +63,14 @@ public class MedicamentoRepositoryMongo implements IMedicamentoRepository {
 
     @Override
     public ResultadoActualizacion actualizarDatos(Medicamento medicamento, DatosMedicamento nuevosDatos) {
-        if (medicamento == null || medicamento.getIdMedicamento() == null) {
+        if (medicamento == null || medicamento.getIdMedicamento() == null || nuevosDatos == null) {
             return ResultadoActualizacion.NO_EXISTE;
         }
 
         try {
             Query query = new Query(Criteria.where("_id").is(medicamento.getIdMedicamento()));
             Update update = new Update()
+                    .set("claveUnica", nuevosDatos.claveUnica())
                     .set("datos.nombre", nuevosDatos.nombre())
                     .set("datos.principioActivo", nuevosDatos.principioActivo())
                     .set("datos.presentacion", nuevosDatos.presentacion())
@@ -61,22 +81,46 @@ public class MedicamentoRepositoryMongo implements IMedicamentoRepository {
                     .set("datos.fechaVencimiento", nuevosDatos.fechaVencimiento())
                     .set("datos.ubicacion", nuevosDatos.ubicacion());
 
-            long modificados = mongoTemplate.updateFirst(query, update, Medicamento.class).getModifiedCount();
-            if (modificados == 0) {
+            // Matched y no modified: MongoDB cuenta 0 modificados cuando los
+            // valores nuevos son iguales a los guardados, y eso no es un error.
+            boolean encontrado = mongoTemplate.updateFirst(query, update, Medicamento.class)
+                    .getMatchedCount() > 0;
+            if (!encontrado) {
                 return ResultadoActualizacion.NO_EXISTE;
             }
             medicamento.setDatos(nuevosDatos);
             return ResultadoActualizacion.ACTUALIZADO;
         } catch (DuplicateKeyException duplicado) {
+            // Otro medicamento ya tiene la nueva clave de unicidad: nada cambia.
             return ResultadoActualizacion.DUPLICADO;
         }
     }
 
     @Override
-    public void actualizarStock(String id, int cantidadStock) {
-        Query query = new Query(Criteria.where("_id").is(id));
-        Update update = new Update().set("cantidadStock", cantidadStock);
-        mongoTemplate.updateFirst(query, update, Medicamento.class);
+    public Medicamento sumarStock(String id, int cantidad) {
+        if (id == null) {
+            return null;
+        }
+        // El tope en long evita el desborde de Java si la cantidad fuera
+        // negativa; MongoDB compara números de cualquier anchura.
+        Query query = new Query(Criteria.where("_id").is(id)
+                .and("cantidadStock").lte((long) Integer.MAX_VALUE - cantidad));
+        Update update = new Update().inc("cantidadStock", cantidad);
+        return mongoTemplate.findAndModify(query, update,
+                FindAndModifyOptions.options().returnNew(true), Medicamento.class);
+    }
+
+    @Override
+    public Medicamento descontarStock(String id, int cantidad, LocalDate hoy) {
+        if (id == null) {
+            return null;
+        }
+        Query query = new Query(Criteria.where("_id").is(id)
+                .and("cantidadStock").gte(cantidad)
+                .and("datos.fechaVencimiento").gte(hoy));
+        Update update = new Update().inc("cantidadStock", -cantidad);
+        return mongoTemplate.findAndModify(query, update,
+                FindAndModifyOptions.options().returnNew(true), Medicamento.class);
     }
 
     @Override
@@ -87,11 +131,7 @@ public class MedicamentoRepositoryMongo implements IMedicamentoRepository {
         return mongoTemplate.findById(id, Medicamento.class);
     }
 
-    @Override
-    public Medicamento buscarPorIdParaActualizar(String id) {
-        return buscarPorId(id);
-    }
-
+    /** Ordenados por id como {@code String.compareTo} (los ids son ASCII). */
     @Override
     public List<Medicamento> listarTodos() {
         Query query = new Query().with(Sort.by(Sort.Direction.ASC, "_id"));
