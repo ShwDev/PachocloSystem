@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -66,29 +65,10 @@ public class ValidacionProduccion implements BeanFactoryPostProcessor, Environme
         return valor == null || valor.isBlank();
     }
 
-    /** Sin valor, o con host localhost / 127.x / ::1 (también dentro de una URL JDBC). */
-    static boolean apuntaALocalhost(String url) {
-        if (vacia(url)) {
-            return true;
-        }
-        String sinJdbc = url.trim().toLowerCase(Locale.ROOT).replaceFirst("^jdbc:", "");
-        String host;
-        try {
-            host = URI.create(sinJdbc).getHost();
-        } catch (IllegalArgumentException malformada) {
-            return false;
-        }
-        if (host == null) {
-            return false;
-        }
-        String sinCorchetes = host.replace("[", "").replace("]", "");
-        return sinCorchetes.equals("localhost") || sinCorchetes.startsWith("127.") || sinCorchetes.equals("::1");
-    }
-
     /**
      * Sin URI, o con algún host localhost / 127.x / ::1. Admite la forma de
      * MongoDB con lista de hosts ({@code mongodb://a:27017,b:27017/db}) y
-     * {@code mongodb+srv://}, donde {@link URI#create(String)} no basta.
+     * {@code mongodb+srv://}, donde {@code URI.create(String)} no basta.
      */
     static boolean apuntaALocalhostMongo(String uri) {
         if (vacia(uri)) {

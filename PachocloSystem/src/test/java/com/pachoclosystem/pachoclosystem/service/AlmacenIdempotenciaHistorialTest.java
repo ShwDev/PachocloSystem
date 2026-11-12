@@ -21,8 +21,8 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 /**
  * Caducidad y cerrojos del almacén de claves del historial, con el estado en un
- * doble en memoria. El estado en PostgreSQL lo prueba
- * {@code HistorialIdempotenciaRepositoryJdbcTest}.
+ * doble en memoria. El estado en MongoDB lo prueba
+ * {@code RepositoriosMongoTest}.
  */
 class AlmacenIdempotenciaHistorialTest {
 

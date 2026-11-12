@@ -66,6 +66,17 @@
 			<artifactId>spring-boot-starter-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- MongoDB real para los tests (réplica de un nodo, para transacciones) -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-mongodb</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.platform</groupId>
+			<artifactId>junit-platform-launcher</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

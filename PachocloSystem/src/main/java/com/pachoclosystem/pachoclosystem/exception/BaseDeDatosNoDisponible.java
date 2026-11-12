@@ -5,10 +5,10 @@ import org.springframework.dao.TransientDataAccessException;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 /**
- * Fallos de PostgreSQL que la API responde con 503 y un mensaje genérico: sin
- * conexión (base caída, pool agotado), sin poder abrir la transacción o un fallo
- * transitorio (p. ej. se agotó {@code lock_timeout}). Repetir la petición más
- * tarde es seguro: la transacción se deshizo.
+ * Fallos de la base de datos (MongoDB) que la API responde con 503 y un mensaje
+ * genérico: sin conexión (base caída, servidor inalcanzable), sin poder abrir la
+ * transacción o un fallo transitorio (conflicto de escritura, commit incierto).
+ * Repetir la petición más tarde es seguro: la transacción se deshizo.
  */
 public final class BaseDeDatosNoDisponible {
 

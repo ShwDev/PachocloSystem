@@ -94,9 +94,7 @@ class ValidacionProduccionTest {
         assertThat(ValidacionProduccion.apuntaALocalhost("http://localhost:8081")).isTrue();
         assertThat(ValidacionProduccion.apuntaALocalhost("http://127.0.0.1:8081")).isTrue();
         assertThat(ValidacionProduccion.apuntaALocalhost("http://[::1]:8081")).isTrue();
-        assertThat(ValidacionProduccion.apuntaALocalhost("jdbc:postgresql://LOCALHOST:5432/x")).isTrue();
         assertThat(ValidacionProduccion.apuntaALocalhost("http://medicamentos.railway.internal:8081")).isFalse();
-        assertThat(ValidacionProduccion.apuntaALocalhost("jdbc:postgresql://postgres.railway.internal:5432/x"))
-                .isFalse();
+        assertThat(ValidacionProduccion.apuntaALocalhost("http://Medicamentos.Railway.Internal:8081")).isFalse();
     }
 }

@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * Doble en memoria de {@link ITrabajadoresRepository} para los tests unitarios,
- * sin base de datos. Reproduce el contrato de {@link TrabajadorRepositoryJdbc}.
+ * sin base de datos. Reproduce el contrato de {@link TrabajadorRepositoryMongo}.
  */
 public class TrabajadorRepositoryEnMemoria implements ITrabajadoresRepository {
 

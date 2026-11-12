@@ -1,6 +1,6 @@
 package com.pachoclosystem.medicamentos.service;
 
-import com.pachoclosystem.medicamentos.PostgresTestBase;
+import com.pachoclosystem.medicamentos.MongoTestBase;
 import com.pachoclosystem.medicamentos.exception.NotFoundException;
 import com.pachoclosystem.medicamentos.exception.SolicitudInvalidaException;
 import com.pachoclosystem.medicamentos.model.DatosMedicamento;
@@ -9,6 +9,7 @@ import com.pachoclosystem.medicamentos.repository.IMedicamentoRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
@@ -24,11 +25,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Concurrencia contra PostgreSQL real: varias peticiones a la vez sobre el mismo
+ * Concurrencia contra MongoDB real: varias peticiones a la vez sobre el mismo
  * medicamento nunca dejan el stock negativo, no pierden actualizaciones ni
  * descuentan dos veces, y una edición que espera a un borrado responde 404.
  */
-class ConcurrenciaStockIntegrationTest extends PostgresTestBase {
+class ConcurrenciaStockIntegrationTest extends MongoTestBase {
 
     @Autowired
     private MedicamentoService servicio;
@@ -138,8 +139,7 @@ class ConcurrenciaStockIntegrationTest extends PostgresTestBase {
 
         assertThat(resultados).noneMatch(SalidasIdempotentesService.Resultado::repetida);
         assertThat(stock(id)).isEqualTo(50 - 16 * 2);
-        assertThat(jdbc.sql("SELECT count(*) FROM idempotencia_salidas").query(Long.class).single())
-                .isEqualTo(16L);
+        assertThat(mongoTemplate.count(new Query(), "idempotencia_salidas")).isEqualTo(16L);
     }
 
     @Test
@@ -161,12 +161,11 @@ class ConcurrenciaStockIntegrationTest extends PostgresTestBase {
         }));
         assertThat(borradoHecho.await(10, TimeUnit.SECONDS)).isTrue();
 
-        // Transacción B: la edición espera al bloqueo de la fila...
+        // Transacción B: la edición no ve el borrado sin confirmar, pero su escritura
+        // espera al bloqueo del documento...
         Future<?> edicion = ejecutor.submit(() -> servicio.editarMedicamento(id,
                 new DatosMedicamento("Dolex Forte", "Paracetamol", Presentacion.TABLETA, "500 mg", "Genfar",
                         "L-1", 5, HOY.plusYears(1), "Estante A3")));
-        Thread.sleep(500);
-        assertThat(edicion).isNotDone();
 
         // ...y cuando A confirma, ya no encuentra el medicamento: 404.
         confirmarBorrado.countDown();

@@ -82,15 +82,17 @@ public class ValidacionProduccion implements BeanFactoryPostProcessor, Environme
         return valor == null || valor.isBlank();
     }
 
-    /** Sin valor, o con host localhost / 127.x / ::1 (también dentro de una URL JDBC). */
+    /**
+     * Sin URL, o con host localhost / 127.x / ::1. Se usa para la dirección de
+     * MedicamentosService en producción.
+     */
     static boolean apuntaALocalhost(String url) {
         if (vacia(url)) {
             return true;
         }
-        String sinJdbc = url.trim().toLowerCase(Locale.ROOT).replaceFirst("^jdbc:", "");
         String host;
         try {
-            host = URI.create(sinJdbc).getHost();
+            host = URI.create(url.trim().toLowerCase(Locale.ROOT)).getHost();
         } catch (IllegalArgumentException malformada) {
             return false;
         }

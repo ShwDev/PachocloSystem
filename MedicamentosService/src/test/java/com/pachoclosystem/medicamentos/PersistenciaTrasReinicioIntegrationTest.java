@@ -15,12 +15,12 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Lo que motivó pasar a PostgreSQL: los medicamentos, su stock y las claves de
+ * Los medicamentos, su stock y las claves de
  * idempotencia sobreviven a un reinicio. Se simula arrancando un segundo
  * contexto de la aplicación, independiente del de los tests, contra la misma
  * base.
  */
-class PersistenciaTrasReinicioIntegrationTest extends PostgresTestBase {
+class PersistenciaTrasReinicioIntegrationTest extends MongoTestBase {
 
     private static final String CLAVE = "clave-antes-del-reinicio-0001";
 
