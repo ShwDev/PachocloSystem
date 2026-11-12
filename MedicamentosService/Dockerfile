@@ -4,10 +4,10 @@
 # variables de entorno en tiempo de ejecución; no se copia ningún .env a la imagen.
 
 # ---- Etapa 1: compilar ----
-# ---- Etapa 1: compilar ----
 FROM eclipse-temurin:25-jdk AS build
 WORKDIR /build
 
+# Primero lo que cambia poco (wrapper y pom) para aprovechar la caché de capas.
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
 RUN --mount=type=cache,id=s/21bd3c6c-80f4-47c4-866c-c701ef52dce7-/root/.m2,target=/root/.m2 \
@@ -16,14 +16,6 @@ RUN --mount=type=cache,id=s/21bd3c6c-80f4-47c4-866c-c701ef52dce7-/root/.m2,targe
 COPY src/ src/
 RUN --mount=type=cache,id=s/21bd3c6c-80f4-47c4-866c-c701ef52dce7-/root/.m2,target=/root/.m2 \
     ./mvnw -B -ntp -DskipTests package \
-    && cp target/*.jar app.jar
-# Primero lo que cambia poco (wrapper y pom) para aprovechar la caché de capas.
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-RUN --mount=type=cache,target=/root/.m2 chmod +x mvnw && ./mvnw -B -ntp dependency:go-offline
-
-COPY src/ src/
-RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -ntp -DskipTests package \
     && cp target/*.jar app.jar
 
 # ---- Etapa 2: ejecutar ----
