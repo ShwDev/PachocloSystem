@@ -7,11 +7,14 @@ import java.util.List;
 
 /**
  * Usuarios de acceso. La implementación de la aplicación es
- * {@link UsuarioRepositoryJdbc} (PostgreSQL).
+ * {@link UsuarioRepositoryMongo} (MongoDB).
  *
  * <p>Cada lectura devuelve un objeto nuevo con el estado guardado: los cambios
  * (estado, contraseña, rol) se guardan con su operación propia, nunca
- * modificando el objeto leído.</p>
+ * modificando el objeto leído. Las operaciones que comprueban y escriben el
+ * mismo dato llevan la condición dentro de la propia escritura, así que no
+ * hace falta bloqueo de fila: si el dato cambió entre medias, la escritura no
+ * se aplica y quien llama lo detecta.</p>
  */
 public interface IUsuarioRepository {
 
@@ -51,11 +54,23 @@ public interface IUsuarioRepository {
     /** Sustituye el hash, sube la versión de token y fija si debe cambiar la contraseña. */
     void cambiarPassword(String idUsuario, String nuevoHash, boolean exigirCambio);
 
+    /**
+     * Como {@link #cambiarPassword(String, String, boolean)}, pero solo si el
+     * hash guardado sigue siendo {@code hashEsperado}: si otro cambio de
+     * contraseña se adelantó, no se escribe nada. Es la comprobación de la
+     * contraseña actual dentro de la propia escritura.
+     *
+     * @return {@code false} si el hash guardado ya no era ese (o el usuario no existe)
+     */
+    boolean cambiarPasswordSiSigueSiendo(String idUsuario, String hashEsperado, String nuevoHash,
+                                         boolean exigirCambio);
+
     Usuario buscarPorId(String id);
 
     /**
-     * Como {@link #buscarPorId(String)}, pero bloquea al usuario hasta el final de
-     * la transacción en curso: otra petición que quiera modificarlo espera.
+     * Como {@link #buscarPorId(String)}. Se mantiene el nombre del contrato
+     * relacional: en MongoDB no hay bloqueo de fila, las escrituras que lo
+     * necesitan llevan sus condiciones dentro de la propia operación.
      */
     Usuario buscarPorIdParaActualizar(String id);
 
@@ -73,7 +88,10 @@ public interface IUsuarioRepository {
     /**
      * Serializa, hasta el final de la transacción en curso, las operaciones que
      * pueden dejar el sistema sin administradores activos (desactivar, activar
-     * y cambiar de rol), aunque haya varias instancias del servicio.
+     * y cambiar de rol), aunque haya varias instancias del servicio: escribe
+     * un contador en un documento compartido, de modo que dos operaciones
+     * simultáneas chocan (conflicto de escritura) y una se reintenta con los
+     * datos frescos.
      */
     void bloquearAdministracion();
 

@@ -3,8 +3,10 @@ package com.pachoclosystem.pachoclosystem.repository;
 import com.pachoclosystem.pachoclosystem.model.Rol;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.annotation.Id;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
@@ -14,6 +16,9 @@ import java.util.List;
 
 @Repository
 public class UsuarioRepositoryMongo implements IUsuarioRepository {
+
+    /** Id del documento de cerrojo que serializa las operaciones administrativas. */
+    private static final String CERROJO_ADMINISTRACION = "administracion";
 
     private final MongoTemplate mongoTemplate;
     private final SecuenciaGeneratorService secuenciaService;
@@ -52,7 +57,9 @@ public class UsuarioRepositoryMongo implements IUsuarioRepository {
             Update update = new Update()
                     .set("rol", nuevoRol)
                     .set("idTrabajador", idTrabajador);
-            return mongoTemplate.updateFirst(query, update, Usuario.class).getModifiedCount() > 0;
+            // Matched y no modified: guardar el mismo rol y trabajador no cambia
+            // nada y no es un error.
+            return mongoTemplate.updateFirst(query, update, Usuario.class).getMatchedCount() > 0;
         } catch (DuplicateKeyException trabajadorOcupado) {
             return false;
         }
@@ -85,6 +92,23 @@ public class UsuarioRepositoryMongo implements IUsuarioRepository {
                 .set("credenciales.debeCambiarPassword", exigirCambio)
                 .inc("credenciales.version", 1);
         mongoTemplate.updateFirst(query, update, Usuario.class);
+    }
+
+    @Override
+    public boolean cambiarPasswordSiSigueSiendo(String idUsuario, String hashEsperado, String nuevoHash,
+                                                boolean exigirCambio) {
+        if (idUsuario == null || nuevoHash == null || nuevoHash.isBlank()) {
+            throw new IllegalArgumentException("El hash de la contraseña es obligatorio.");
+        }
+        // El hash esperado va en la condición: si otro cambio de contraseña se
+        // adelantó, la escritura no se aplica (equivale al bloqueo de fila).
+        Query query = new Query(Criteria.where("_id").is(idUsuario)
+                .and("credenciales.hash").is(hashEsperado));
+        Update update = new Update()
+                .set("credenciales.hash", nuevoHash)
+                .set("credenciales.debeCambiarPassword", exigirCambio)
+                .inc("credenciales.version", 1);
+        return mongoTemplate.updateFirst(query, update, Usuario.class).getMatchedCount() > 0;
     }
 
     @Override
@@ -132,12 +156,27 @@ public class UsuarioRepositoryMongo implements IUsuarioRepository {
 
     @Override
     public void bloquearAdministracion() {
-        // En MongoDB las modificaciones atómicas a nivel de documento no requieren pg_advisory_xact_lock
+        // Cerrojo compartido: incrementar el mismo documento dentro de la
+        // transacción hace que dos operaciones administrativas simultáneas
+        // choquen (conflicto de escritura) y una se reintente con datos frescos.
+        Query query = new Query(Criteria.where("_id").is(CERROJO_ADMINISTRACION));
+        Update update = new Update().inc("contador", 1);
+        mongoTemplate.upsert(query, update, CerrojoDocument.class);
     }
 
     @Override
     public List<Usuario> listarTodos() {
         Query query = new Query().with(Sort.by(Sort.Direction.ASC, "_id"));
         return mongoTemplate.find(query, Usuario.class);
+    }
+
+    /** Documento único que serializa las operaciones administrativas. */
+    @Document(collection = "cerrojos")
+    static class CerrojoDocument {
+        @Id
+        private String id;
+        private long contador;
+
+        public CerrojoDocument() {}
     }
 }

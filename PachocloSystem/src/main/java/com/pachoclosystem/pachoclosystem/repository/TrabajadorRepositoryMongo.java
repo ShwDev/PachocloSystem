@@ -62,7 +62,7 @@ public class TrabajadorRepositoryMongo implements ITrabajadoresRepository {
             update.set("nivelExperiencia", e.getNivelExperiencia());
         }
 
-        return mongoTemplate.updateFirst(query, update, TrabajadorHospital.class).getModifiedCount() > 0;
+        return mongoTemplate.updateFirst(query, update, TrabajadorHospital.class).getMatchedCount() > 0;
     }
 
     @Override

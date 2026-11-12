@@ -9,8 +9,9 @@ import com.pachoclosystem.pachoclosystem.model.TrabajadorHospital;
 import com.pachoclosystem.pachoclosystem.model.Usuario;
 import com.pachoclosystem.pachoclosystem.repository.ITrabajadoresRepository;
 import com.pachoclosystem.pachoclosystem.repository.IUsuarioRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,12 +36,21 @@ public class TrabajadorService {
      * no debe poder construirse.
      */
     private final IUsuarioRepository usuarioRepository;
+    private final TransactionOperations transacciones;
 
+    /** Sin Spring (tests unitarios): sin transacción y sin reintentos. */
     public TrabajadorService(ITrabajadoresRepository repositorio, IUsuarioRepository usuarioRepository) {
+        this(repositorio, usuarioRepository, TransactionOperations.withoutTransaction());
+    }
+
+    @Autowired
+    public TrabajadorService(ITrabajadoresRepository repositorio, IUsuarioRepository usuarioRepository,
+                             TransactionOperations transacciones) {
         this.repositorio = Objects.requireNonNull(repositorio,
                 "El repositorio de trabajadores es obligatorio.");
         this.usuarioRepository = Objects.requireNonNull(usuarioRepository,
                 "El repositorio de usuarios es obligatorio para la cascada de desactivación.");
+        this.transacciones = transacciones;
     }
 
     // El servicio genera el ID (con prefijo según el rol) y construye el objeto correcto.
@@ -59,12 +69,11 @@ public class TrabajadorService {
         return trabajador;
     }
 
-    // En edición el id y el rol no cambian. Se lee bloqueando la fila: una edición
-    // y un borrado simultáneos se aplican uno detrás de otro.
-    @Transactional
+    // En edición el id y el rol no cambian. Es un único documento: la escritura
+    // lleva su condición dentro y, si el trabajador se borró a la vez, responde 404.
     public TrabajadorHospital editarTrabajador(String id, String nombre, String rol, String especialidad,
                                                NivelExperiencia nivel) {
-        TrabajadorHospital existente = repositorio.buscarPorIdParaActualizar(id);
+        TrabajadorHospital existente = repositorio.buscarPorId(id);
         if (existente == null) {
             throw noEncontrado(id);
         }
@@ -87,15 +96,18 @@ public class TrabajadorService {
         return existente;
     }
 
-    @Transactional
     public void eliminarTrabajador(String id) {
         // Cascada y borrado en la misma transacción: si el borrado no encuentra el
         // trabajador (404) o algo falla, la desactivación del usuario también se
         // deshace. Si el trabajador no existe, la cascada no encuentra usuario.
-        desactivarUsuarioVinculado(id);
-        if (!repositorio.eliminarTrabajador(id)) {
-            throw noEncontrado(id);
-        }
+        // Un conflicto de escritura con otra operación simultánea se reintenta.
+        TransaccionConReintentos.ejecutar(transacciones, () -> {
+            desactivarUsuarioVinculado(id);
+            if (!repositorio.eliminarTrabajador(id)) {
+                throw noEncontrado(id);
+            }
+            return null;
+        });
     }
 
     /**
