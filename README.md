@@ -188,6 +188,26 @@ propio MongoDB).
 - [`docs/plan-frontend.md`](docs/plan-frontend.md): plan y decisiones del frontend.
 - [`docs/despliegue.md`](docs/despliegue.md): despliegue en Railway y Vercel.
 
+## Documentación de la API (OpenAPI/Swagger)
+
+Los dos backends publican su API con **springdoc-openapi**, con la interfaz interactiva y el JSON
+OpenAPI en estas rutas (relativas al host del servicio, así que valen igual en local y en un
+despliegue):
+
+| Servicio | Swagger UI | OpenAPI JSON |
+|---|---|---|
+| PachocloSystem | `http://localhost:8080/swagger-ui.html` | `http://localhost:8080/v3/api-docs` |
+| MedicamentosService | `http://localhost:8081/swagger-ui.html` | `http://localhost:8081/v3/api-docs` |
+
+- **PachocloSystem:** el botón **Authorize** pide el token JWT que devuelve `POST /api/auth/login`;
+  el resto de operaciones lo envían como `Authorization: Bearer <token>`.
+- **MedicamentosService:** el botón **Authorize** pide la clave compartida (`MEDICAMENTOS_API_KEY`),
+  que se envía en `X-Api-Key`.
+
+Las rutas de documentación son **públicas** (no exigen token ni clave) y no aparecen en los
+listados de la API. Se desactivan con `SWAGGER_ENABLED=false` (por defecto `true`); en producción
+conviene dejarlas activas solo si el servicio no es accesible desde Internet.
+
 ## Limitaciones conocidas
 
 Reúne lo que ya documentan los README de cada módulo (enlazados arriba). El detalle y el motivo

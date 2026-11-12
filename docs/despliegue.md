@@ -80,6 +80,9 @@ Notas:
 - La base va **en la propia URI** (la ruta después del host). No hay variables `*_DB_URL`, `*_DB_USER`
   ni `*_DB_PASSWORD`: todas se sustituyen por esa única cadena.
 - `MEDICAMENTOS_URL` usa `http`: el tráfico va por la red privada de Railway, que ya está cifrada.
+- **Swagger:** `PachocloSystem` publica `/swagger-ui.html` y `/v3/api-docs` en su dominio público;
+  `MedicamentosService` también las publica, pero solo son alcanzables por la red privada. Con
+  `SWAGGER_ENABLED=false` se desactivan en cualquiera de los dos (por defecto `true`).
 - `CORS_ORIGENES` no admite comodines: los despliegues de *preview* de Vercel compilan, pero el
   navegador bloquea sus peticiones a la API.
 - Si el proveedor de MongoDB exige permitir IPs de origen, añada las de salida de Railway (o use

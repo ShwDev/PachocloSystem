@@ -131,6 +131,23 @@ src/main/java/com/pachoclosystem/pachoclosystem/
 └── exception/    errores y @RestControllerAdvice
 ```
 
+## Documentación de la API (Swagger)
+
+Con el servicio en marcha, la documentación OpenAPI está en:
+
+| Recurso | Ruta |
+|---|---|
+| Swagger UI (interactiva) | `http://localhost:8080/swagger-ui.html` |
+| OpenAPI JSON | `http://localhost:8080/v3/api-docs` |
+
+La interfaz cubre todas las rutas, sus roles, códigos de respuesta, DTO y la cabecera
+`Idempotency-Key` del historial. Para probar una operación autenticada: ejecute
+`POST /api/auth/login`, copie el `token` y púlselo en **Authorize** (`bearerAuth`); desde ahí
+Swagger lo envía como `Authorization: Bearer <token>`. El login no exige token.
+
+Estas rutas son públicas y quedan fuera de la autenticación; aun así, no exponen datos. Se
+desactivan con `SWAGGER_ENABLED=false` (por defecto `true`), lo que también elimina las rutas.
+
 ## Endpoints
 
 ### Pacientes — `/api/pacientes`
