@@ -126,6 +126,23 @@ Si el medicamento desaparece mientras otra petición lo edita o lo elimina, la o
 No puede haber dos medicamentos con el mismo **nombre + concentración + presentación + lote**
 (sin distinguir mayúsculas): el intento devuelve `409`.
 
+## Documentación de la API (Swagger)
+
+Con el servicio en marcha, la documentación OpenAPI está en:
+
+| Recurso | Ruta |
+|---|---|
+| Swagger UI (interactiva) | `http://localhost:8081/swagger-ui.html` |
+| OpenAPI JSON | `http://localhost:8081/v3/api-docs` |
+
+La interfaz cubre todas las rutas, códigos de respuesta, DTO y la cabecera `Idempotency-Key` de las
+salidas. Para probar una operación: pulse **Authorize** (`claveServicio`) e introduzca el valor de
+`MEDICAMENTOS_API_KEY`; Swagger lo enviará en `X-Api-Key`. Si la clave está vacía (solo desarrollo),
+no hace falta.
+
+Estas rutas son públicas (el filtro de clave solo cubre `/api/**`) y se desactivan con
+`SWAGGER_ENABLED=false` (por defecto `true`).
+
 ## Endpoints — `/api/medicamentos`
 
 | Método | Ruta | Descripción | Respuestas |

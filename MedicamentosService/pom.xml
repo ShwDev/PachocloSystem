@@ -15,6 +15,8 @@
 	<description>Microservicio de gestión de medicamentos con persistencia en MongoDB Atlas</description>
 	<properties>
 		<java.version>25</java.version>
+		<!-- Documentación OpenAPI/Swagger. La 3.x es la rama para Spring Boot 4. -->
+		<springdoc.version>3.2.0</springdoc.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -28,6 +30,13 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
+		<!-- Documentación interactiva de la API: /swagger-ui.html y /v3/api-docs -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>${springdoc.version}</version>
 		</dependency>
 		
 		<!-- Persistencia MongoDB -->

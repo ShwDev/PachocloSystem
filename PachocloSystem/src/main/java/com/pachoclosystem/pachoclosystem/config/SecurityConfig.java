@@ -28,9 +28,10 @@ import org.springframework.web.cors.CorsConfigurationSource;
  * Cadena de filtros de seguridad stateless con tokens JWT (HS256) y resource
  * server de OAuth2 (Nimbus).
  *
- * <p>Solo {@code POST /api/auth/login} y los health checks
- * ({@code GET /actuator/health/**}) son públicos; el resto exige un token y
- * cada ruta, un rol (tabla de permisos en el README y en
+ * <p>Solo {@code POST /api/auth/login}, los health checks
+ * ({@code GET /actuator/health/**}) y la documentación OpenAPI
+ * ({@code /v3/api-docs}, {@code /swagger-ui/**}) son públicos; el resto exige un
+ * token y cada ruta, un rol (tabla de permisos en el README y en
  * {@code AutorizacionPorRolTest}). Las rutas concretas van antes que las
  * generales: Spring aplica la primera regla que coincide. Cada recurso termina
  * en una regla solo-ADMIN, de modo que un endpoint nuevo sin regla propia queda
@@ -98,6 +99,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         // Health checks de la plataforma de despliegue (sin detalles internos).
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                        // Documentación OpenAPI/Swagger: pública para poder consultarla sin token.
+                        // Con SWAGGER_ENABLED=false (springdoc.api-docs.enabled) deja de existir.
+                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml",
+                                "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         // Identidad y cambio de contraseña propia: cualquier usuario
                         // autenticado, también con la contraseña pendiente de cambio.
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()

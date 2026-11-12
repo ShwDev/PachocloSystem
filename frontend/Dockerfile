@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
-# Frontend Angular. Etapa Node para `ng build` y etapa nginx (sin privilegios) para
-# servir. El build usa environment.ts (apiBaseUrl vacía): el navegador llama a /api en
+# Frontend Angular + React. Etapa Node para `ng build` (antes compila la interfaz
+# React con `npm run build:react`) y etapa nginx (sin privilegios) para servir.
+# El build usa environment.ts (apiBaseUrl vacía): el navegador llama a /api en
 # el mismo origen y nginx lo reenvía a PachocloSystem (ver nginx.conf).
 
 # ---- Etapa 1: compilar ----
