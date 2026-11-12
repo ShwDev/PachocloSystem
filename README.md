@@ -23,7 +23,7 @@ URL: [PachocloSystem](https://pachoclo-system-frontend.vercel.app/)
 
 | Parte | Carpeta | Puerto | Qué hace |
 |---|---|---|---|
-| Frontend | [`frontend/`](frontend/) | 4200 | SPA Angular. Solo habla con PachocloSystem. |
+| Frontend | [`frontend/`](frontend/) | 4200 | SPA Angular con una segunda interfaz de Medicamentos en React (Web Component). Solo habla con PachocloSystem. |
 | PachocloSystem | [`PachocloSystem/`](PachocloSystem/) | 8080 | API principal (Spring Boot): autenticación JWT, permisos por rol, pacientes, trabajadores, usuarios, historial clínico. Es la única puerta de entrada a los medicamentos. |
 | MedicamentosService | [`MedicamentosService/`](MedicamentosService/) | 8081 | Microservicio de inventario (Spring Boot): stock, entradas y salidas, vencimientos. |
 
@@ -171,7 +171,8 @@ Cada parte se prueba por separado, desde su carpeta:
 ```bash
 cd PachocloSystem && ./mvnw test          # API principal (en PowerShell: .\mvnw.cmd test)
 cd MedicamentosService && ./mvnw test     # microservicio de medicamentos
-cd frontend && npm test                   # unitarios (Vitest)
+cd frontend && npm test                   # unitarios de Angular (Vitest)
+cd frontend && npm run test:react         # unitarios de la interfaz React (Vitest)
 cd frontend && npm run build              # build de producción en frontend/dist
 ```
 
@@ -183,9 +184,29 @@ propio MongoDB).
 
 - [`PachocloSystem/README.md`](PachocloSystem/README.md): endpoints, permisos por rol, JWT, usuarios, historial idempotente e integración con medicamentos.
 - [`MedicamentosService/README.md`](MedicamentosService/README.md): modelo, endpoints, stock, vencimientos e idempotencia de las salidas.
-- [`frontend/README.md`](frontend/README.md): estructura, patrón de los módulos, roles, sesión y errores.
+- [`frontend/README.md`](frontend/README.md): estructura, patrón de los módulos, segunda interfaz React, roles, sesión y errores.
 - [`docs/plan-frontend.md`](docs/plan-frontend.md): plan y decisiones del frontend.
 - [`docs/despliegue.md`](docs/despliegue.md): despliegue en Railway y Vercel.
+
+## Documentación de la API (OpenAPI/Swagger)
+
+Los dos backends publican su API con **springdoc-openapi**, con la interfaz interactiva y el JSON
+OpenAPI en estas rutas (relativas al host del servicio, así que valen igual en local y en un
+despliegue):
+
+| Servicio | Swagger UI | OpenAPI JSON |
+|---|---|---|
+| PachocloSystem | `http://localhost:8080/swagger-ui.html` | `http://localhost:8080/v3/api-docs` |
+| MedicamentosService | `http://localhost:8081/swagger-ui.html` | `http://localhost:8081/v3/api-docs` |
+
+- **PachocloSystem:** el botón **Authorize** pide el token JWT que devuelve `POST /api/auth/login`;
+  el resto de operaciones lo envían como `Authorization: Bearer <token>`.
+- **MedicamentosService:** el botón **Authorize** pide la clave compartida (`MEDICAMENTOS_API_KEY`),
+  que se envía en `X-Api-Key`.
+
+Las rutas de documentación son **públicas** (no exigen token ni clave) y no aparecen en los
+listados de la API. Se desactivan con `SWAGGER_ENABLED=false` (por defecto `true`); en producción
+conviene dejarlas activas solo si el servicio no es accesible desde Internet.
 
 ## Limitaciones conocidas
 

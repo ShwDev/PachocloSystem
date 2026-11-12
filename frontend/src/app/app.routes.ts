@@ -66,6 +66,14 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'medicamentos-react',
+        title: 'Medicamentos React · PachocloSystem',
+        loadComponent: () =>
+          import('./features/medicamentos-react/medicamentos-react.component').then(
+            (m) => m.MedicamentosReactComponent,
+          ),
+      },
+      {
         path: 'historial',
         title: 'Historial clínico · PachocloSystem',
         loadComponent: () =>

@@ -252,6 +252,11 @@ class AutorizacionPorRolTest extends MockMvcBaseTest {
             if (info.getPatternValues().contains("/error")) {
                 return; // BasicErrorController de Spring Boot, no es API propia
             }
+            // Swagger UI y /v3/api-docs los sirve springdoc: son públicos
+            // (permitAll en SecurityConfig) y no forman parte de la tabla de permisos.
+            if (manejador.getBeanType().getName().startsWith("org.springdoc.")) {
+                return;
+            }
             if (!atendidos.contains(manejador.getMethod())) {
                 sinFila.add(info.getMethodsCondition().getMethods() + " " + info.getPatternValues());
             }

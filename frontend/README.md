@@ -1,6 +1,8 @@
 # Frontend de PachocloSystem
 
-SPA en Angular 22 (standalone, zoneless, signals) con Angular Material.
+SPA en Angular 22 (standalone, zoneless, signals) con Angular Material, más una
+**segunda interfaz de Medicamentos escrita en React 19** y montada dentro de la SPA como Web
+Component.
 Consume **solo** la API de PachocloSystem (`/api/**`, puerto 8080); nunca llama a MedicamentosService.
 Plan completo y decisiones: [`docs/plan-frontend.md`](../docs/plan-frontend.md).
 
@@ -28,9 +30,12 @@ Desde **Usuarios** el admin crea los usuarios de doctores y enfermeros. Si se ar
 ## Comandos
 
 ```bash
-npm test                # tests unitarios (Vitest)
+npm test                # tests unitarios de Angular (Vitest)
+npm run test:react      # tests de la interfaz React (Vitest + Testing Library)
 npm run lint            # ESLint (angular-eslint)
 npm run format:check    # Prettier (npm run format para corregir)
+npm run build:react     # compila la interfaz React en public/react/
+npm run watch:react     # recompila la interfaz React al guardar (otra terminal)
 npm run build           # build de producción en dist/frontend (API en el mismo origen)
 npm run build:vercel    # build de Vercel: exige API_BASE_URL (ver abajo)
 ```
@@ -61,6 +66,9 @@ src/app/
 ├── shared/     piezas reutilizables (validadores, errores de formulario, diálogo de confirmación)
 ├── layout/     marco de la app autenticada (barra superior y menú lateral)
 └── features/   pantallas: login, cambio de contraseña, 404 y módulos (pacientes, trabajadores, ...)
+
+react-medicamentos/   segunda interfaz de Medicamentos en React (se compila a public/react/)
+public/               assets estáticos; public/react/ es la salida de `npm run build:react`
 ```
 
 Convención: nombres de dominio en español y sufijos de Angular en inglés
@@ -80,6 +88,36 @@ Pacientes, trabajadores y medicamentos siguen el mismo patrón:
   mensajes que el backend). Guardan ellos mismos, así un 400 se muestra dentro del formulario con
   `<app-errores-formulario>`, y se cierran con la entidad guardada.
 - **Borrado**: `confirmar()` (`shared/confirmacion-dialogo`) y después `NotificacionService`.
+
+## Segunda interfaz de Medicamentos (React)
+
+`/medicamentos-react` (menú **Medicamentos React**) es una versión alternativa del inventario
+escrita en **React 19 + TypeScript**, compilada con **Vite** y montada dentro de la misma SPA. No
+es una aplicación aparte: se sirve el mismo despliegue y se comparte la sesión.
+
+- **Código:** `react-medicamentos/` (fuera de `src/`, para que el compilador de Angular no lo
+  procese). Incluye tipos, cliente HTTP, permisos, diálogos y tests propios.
+- **Empaquetado:** `npm run build:react` genera una librería IIFE en
+  `public/react/pachoclo-medicamentos.js` que registra el custom element
+  `<pachoclo-medicamentos-react>`. Como está en `public/`, Angular lo copia al build y nginx/Vercel
+  lo sirven como un asset más. `public/react/` está ignorado por git.
+- **Integración Angular:** la ruta carga `features/medicamentos-react`, que inyecta el script una
+  sola vez y crea el custom element pasándole el origen de la API en el atributo `api-base`
+  (`API_BASE_URL`, vacío si es el mismo origen). Al destruir la ruta se desmonta React.
+- **Aislamiento:** el componente usa **Shadow DOM** y su propia hoja de estilos, así que no hereda
+  ni altera los estilos de Angular Material.
+- **Sesión y API:** el token se lee de `sessionStorage` (`pachoclosystem.sesion`, la misma clave
+  que `AuthService`) en cada petición, y se usa la misma API `/api/medicamentos`. Los permisos por
+  rol (`medicamentos.escribir` / `medicamentos.salidas`) son una copia de los de Angular; el
+  backend sigue decidiendo.
+- **Funcionalidad:** pestañas (todos, stock bajo, por vencer y vencidos), búsqueda, alta, edición,
+  baja, entradas y salidas de stock. Las salidas envían `Idempotency-Key`, igual que la interfaz
+  Angular; PachocloSystem todavía no reenvía esa cabecera en `POST /api/medicamentos/{id}/salidas`,
+  así que a través de la SPA el reintento no está garantizado.
+- **Desarrollo:** `npm start` compila React una vez y arranca Angular. Para editar React en vivo,
+  deje `npm run watch:react` en otra terminal y recargue la ruta.
+- **Tests:** `npm run test:react` (Vitest en jsdom + Testing Library). El cliente HTTP se prueba
+  con `fetch` simulado; la interfaz, con un cliente falso.
 
 ## Roles
 
