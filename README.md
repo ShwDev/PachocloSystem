@@ -16,14 +16,16 @@ URL: [PachocloSystem](https://pachoclo-system-frontend.vercel.app/)
 
 ```
  Navegador ──► Frontend Angular ──/api──► PachocloSystem ──X-Api-Key──► MedicamentosService
-               (localhost:4200)           (localhost:8080)              (localhost:8081)
-                                           JWT, roles, pacientes,        inventario y stock
-                                           trabajadores, historial       de medicamentos
+               (localhost:4200)      ┌──► (localhost:8080)              (localhost:8081)
+                                     │     JWT, roles, pacientes,        inventario y stock
+ Navegador ──► Frontend React ──/api─┘     trabajadores, historial       de medicamentos
+               (localhost:5173)
 ```
 
 | Parte | Carpeta | Puerto | Qué hace |
 |---|---|---|---|
-| Frontend | [`frontend/`](frontend/) | 4200 | SPA Angular con una segunda interfaz de Medicamentos en React (Web Component). Solo habla con PachocloSystem. |
+| Frontend | [`frontend/`](frontend/) | 4200 | SPA Angular con todos los módulos. Solo habla con PachocloSystem. |
+| Frontend React | [`frontend-react/`](frontend-react/) | 5173 (Docker: 4300) | Aplicación independiente en React solo para el inventario de Medicamentos, con su propio login. Solo habla con PachocloSystem. |
 | PachocloSystem | [`PachocloSystem/`](PachocloSystem/) | 8080 | API principal (Spring Boot): autenticación JWT, permisos por rol, pacientes, trabajadores, usuarios, historial clínico. Es la única puerta de entrada a los medicamentos. |
 | MedicamentosService | [`MedicamentosService/`](MedicamentosService/) | 8081 | Microservicio de inventario (Spring Boot): stock, entradas y salidas, vencimientos. |
 
@@ -172,7 +174,7 @@ Cada parte se prueba por separado, desde su carpeta:
 cd PachocloSystem && ./mvnw test          # API principal (en PowerShell: .\mvnw.cmd test)
 cd MedicamentosService && ./mvnw test     # microservicio de medicamentos
 cd frontend && npm test                   # unitarios de Angular (Vitest)
-cd frontend && npm run test:react         # unitarios de la interfaz React (Vitest)
+cd frontend-react && npm test              # unitarios de la app React (Vitest)
 cd frontend && npm run build              # build de producción en frontend/dist
 ```
 
@@ -184,7 +186,8 @@ propio MongoDB).
 
 - [`PachocloSystem/README.md`](PachocloSystem/README.md): endpoints, permisos por rol, JWT, usuarios, historial idempotente e integración con medicamentos.
 - [`MedicamentosService/README.md`](MedicamentosService/README.md): modelo, endpoints, stock, vencimientos e idempotencia de las salidas.
-- [`frontend/README.md`](frontend/README.md): estructura, patrón de los módulos, segunda interfaz React, roles, sesión y errores.
+- [`frontend/README.md`](frontend/README.md): estructura, patrón de los módulos, roles, sesión y errores.
+- [`frontend-react/README.md`](frontend-react/README.md): app React de Medicamentos (login, desarrollo, Docker y despliegue).
 - [`docs/plan-frontend.md`](docs/plan-frontend.md): plan y decisiones del frontend.
 - [`docs/despliegue.md`](docs/despliegue.md): despliegue en Railway y Vercel.
 

@@ -25,7 +25,6 @@ const SECCIONES: readonly Seccion[] = [
   { ruta: '/pacientes', etiqueta: 'Pacientes', icono: 'personal_injury' },
   { ruta: '/trabajadores', etiqueta: 'Trabajadores', icono: 'badge', permiso: 'trabajadores.leer' },
   { ruta: '/medicamentos', etiqueta: 'Medicamentos', icono: 'medication' },
-  { ruta: '/medicamentos-react', etiqueta: 'Medicamentos React', icono: 'code' },
   { ruta: '/historial', etiqueta: 'Historial clínico', icono: 'history_edu' },
   {
     ruta: '/usuarios',

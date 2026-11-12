@@ -36,9 +36,9 @@ export interface PropsMedicamentos {
 }
 
 /**
- * Segunda interfaz del inventario, en React. Se compila como custom element y
- * la SPA Angular la monta en `/medicamentos-react`. Consume la misma API
- * (`/api/medicamentos`) y comparte la sesión de la SPA.
+ * Inventario de medicamentos en React: listado con filtros, altas, ediciones,
+ * bajas y movimientos de stock. Consume la misma API que la SPA Angular
+ * (`/api/medicamentos` de PachocloSystem).
  */
 export function Medicamentos({ cliente, rol }: PropsMedicamentos) {
   const [vista, setVista] = useState<Vista>('todos');
@@ -151,9 +151,7 @@ export function Medicamentos({ cliente, rol }: PropsMedicamentos) {
           <h1 id="titulo-medicamentos">
             Medicamentos <span className="etiqueta-framework">React</span>
           </h1>
-          <p className="subtitulo">
-            Segunda interfaz del inventario, montada dentro de la SPA Angular.
-          </p>
+          <p className="subtitulo">Inventario de medicamentos de PachocloSystem.</p>
         </div>
         {puedeEscribir && (
           <button

@@ -1,8 +1,8 @@
 # PachocloSystem en Docker Compose
 
-Despliegue multicontenedor del sistema: 5 servicios, 2 redes y 2 volúmenes definidos en
+Despliegue multicontenedor del sistema: 6 servicios, 2 redes y 2 volúmenes definidos en
 [`docker-compose.yml`](../docker-compose.yml). Las imágenes se construyen desde los Dockerfiles de
-cada carpeta (`frontend/`, `PachocloSystem/`, `MedicamentosService/`) y la base usa la imagen
+cada carpeta (`frontend/`, `frontend-react/`, `PachocloSystem/`, `MedicamentosService/`) y la base usa la imagen
 oficial `mongo:8`.
 
 ## Arquitectura
@@ -49,10 +49,16 @@ con `0`. `pachoclo-api` y `medicamentos-service` no arrancan hasta que termina.
 | Servicio | Imagen | Red(es) | Puerto al host | Volumen |
 |---|---|---|---|---|
 | `frontend` | build `./frontend` (nginx sin privilegios) | publica | **4200** → 8080 | — |
+| `frontend-react` | build `./frontend-react` (nginx sin privilegios) | publica | **4300** → 8080 | — |
 | `pachoclo-api` | build `./PachocloSystem` (Java 25) | publica + interna | no | `pachoclo-logs` |
 | `medicamentos-service` | build `./MedicamentosService` (Java 25) | interna | no | — |
 | `mongo` | `mongo:8` | interna | no | `mongo-datos` |
 | `mongo-init` | `mongo:8` | interna | no | — |
+
+`frontend-react` (la app React de Medicamentos, en <http://localhost:4300>) funciona igual que
+`frontend`: su propio nginx con IP fija `172.28.10.11` (`NGINX_REACT_IP`) sirve la app y reenvía
+`/api/*` a `pachoclo-api`. No está en `docker-compose.hub.yml` porque su imagen no se publica en
+Docker Hub. El diagrama de arriba muestra solo el frontend Angular.
 
 Flujo: el navegador solo habla con nginx. nginx sirve la SPA y reenvía `/api/*` a `pachoclo-api`
 (mismo origen, por eso no hace falta CORS). `pachoclo-api` es la única que habla con

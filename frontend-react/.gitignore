@@ -1,0 +1,17 @@
+# Dependencias y salidas locales
+/node_modules
+/dist
+/coverage
+*.log
+*.tsbuildinfo
+
+# Variables locales de Vite (p. ej. VITE_API_BASE_URL)
+.env.local
+.env.*.local
+
+# Editores y sistema
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

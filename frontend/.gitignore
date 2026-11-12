@@ -8,12 +8,8 @@
 
 # Node
 /node_modules
-/react-medicamentos/node_modules
 npm-debug.log
 yarn-error.log
-
-# Bundle React generado por `npm run build:react` (Angular lo copia de public/)
-/public/react
 
 # IDEs and editors
 .idea/

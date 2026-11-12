@@ -21,6 +21,26 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # ---------- Frontend React: app independiente de Medicamentos (nginx) ----------
+  frontend-react:
+    build: ./frontend-react
+    image: ${DOCKERHUB_USER:-pachoclo}/pachoclo-frontend-react:${IMAGE_TAG:-latest}
+    ports:
+      - "${FRONTEND_REACT_PORT:-4300}:8080"
+    networks:
+      publica:
+        ipv4_address: ${NGINX_REACT_IP:-172.28.10.11}
+    depends_on:
+      pachoclo-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   # ---------- API principal: JWT, roles, pacientes, trabajadores, historial ----------
   pachoclo-api:
     build: ./PachocloSystem
@@ -34,7 +54,8 @@ services:
       MEDICAMENTOS_API_KEY: ${MEDICAMENTOS_API_KEY:?defina MEDICAMENTOS_API_KEY en .env}
       SPRING_MONGODB_URI: ${PACHOCLO_MONGO_URI:?defina PACHOCLO_MONGO_URI en .env}
       CORS_ORIGENES: ${CORS_ORIGENES:-}
-      APP_LOGIN_PROXIES_CONFIABLES: ${NGINX_IP:-172.28.10.10}
+      # Los dos nginx (Angular y React) son proxies de confianza para X-Forwarded-For.
+      APP_LOGIN_PROXIES_CONFIABLES: ${NGINX_IP:-172.28.10.10},${NGINX_REACT_IP:-172.28.10.11}
       LOGGING_FILE_NAME: /var/log/pachoclo/pachoclosystem.log
     volumes:
       - pachoclo-logs:/var/log/pachoclo

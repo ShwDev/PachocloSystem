@@ -36,6 +36,58 @@ export function esCancelacion(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
+export interface OpcionesSolicitud {
+  /** Token JWT para la cabecera `Authorization`, o `null` si no hay sesión. */
+  token?: string | null;
+  /** Inyectable en los tests; en el navegador es `fetch`. */
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * Hace una petición JSON a la API y devuelve el cuerpo. Cualquier error HTTP o de
+ * red se convierte en {@link ErrorApi} con los mensajes del backend; una
+ * cancelación se relanza tal cual.
+ */
+export async function solicitar<T>(
+  url: string,
+  opciones: RequestInit = {},
+  { token = null, fetchImpl = fetch }: OpcionesSolicitud = {},
+): Promise<T> {
+  const cabeceras = new Headers(opciones.headers);
+  cabeceras.set('Accept', 'application/json');
+  if (opciones.body !== undefined) {
+    cabeceras.set('Content-Type', 'application/json');
+  }
+  if (token) {
+    cabeceras.set('Authorization', `Bearer ${token}`);
+  }
+
+  let respuesta: Response;
+  try {
+    respuesta = await fetchImpl(url, { ...opciones, headers: cabeceras });
+  } catch (error) {
+    if (esCancelacion(error)) {
+      throw error;
+    }
+    throw new ErrorApi(0, [MENSAJE_SIN_CONEXION]);
+  }
+
+  if (respuesta.status === 204) {
+    return undefined as T;
+  }
+
+  const cuerpo = await leerCuerpo(respuesta);
+  if (!respuesta.ok) {
+    throw new ErrorApi(respuesta.status, mensajesDeCuerpo(cuerpo) ?? [MENSAJE_SIN_CONEXION]);
+  }
+  return cuerpo as T;
+}
+
+/** Une el origen de la API (con o sin barra final) con una ruta absoluta. */
+export function urlApi(apiBaseUrl: string, ruta: string): string {
+  return `${apiBaseUrl.replace(/\/+$/, '')}${ruta}`;
+}
+
 /** Operaciones de `/api/medicamentos` que usa la interfaz React. */
 export interface ClienteMedicamentos {
   listar(texto: string, signal?: AbortSignal): Promise<Medicamento[]>;
@@ -56,54 +108,36 @@ export interface ClienteMedicamentos {
 export interface OpcionesCliente {
   /** Origen de la API sin barra final, o vacío si está en el mismo origen. */
   apiBaseUrl: string;
-  /** De dónde se lee el token en cada petición (por defecto, la sesión de la SPA). */
+  /** De dónde se lee el token en cada petición (por defecto, la sesión guardada). */
   obtenerToken?: () => string | null;
+  /** Se llama cuando la API responde 401: el token ya no sirve. */
+  alNoAutorizado?: () => void;
   /** Inyectable en los tests; en el navegador es `fetch`. */
   fetchImpl?: typeof fetch;
 }
 
 /**
- * Construye el cliente HTTP. La base de la API la pasa Angular por el atributo
- * `api-base` del custom element; el token se relee en cada petición para que una
- * sesión renovada en la SPA se use sin volver a montar la interfaz.
+ * Construye el cliente HTTP de `/api/medicamentos`. El token se relee en cada
+ * petición; un 401 avisa con `alNoAutorizado` para que la app cierre la sesión.
  */
 export function crearCliente({
   apiBaseUrl,
   obtenerToken = leerToken,
+  alNoAutorizado,
   fetchImpl = fetch,
 }: OpcionesCliente): ClienteMedicamentos {
-  const base = apiBaseUrl.replace(/\/+$/, '');
-
   async function pedir<T>(ruta: string, opciones: RequestInit = {}): Promise<T> {
-    const cabeceras = new Headers(opciones.headers);
-    cabeceras.set('Accept', 'application/json');
-    if (opciones.body !== undefined) {
-      cabeceras.set('Content-Type', 'application/json');
-    }
-    const token = obtenerToken();
-    if (token) {
-      cabeceras.set('Authorization', `Bearer ${token}`);
-    }
-
-    let respuesta: Response;
     try {
-      respuesta = await fetchImpl(`${base}${RUTA}${ruta}`, { ...opciones, headers: cabeceras });
+      return await solicitar<T>(urlApi(apiBaseUrl, `${RUTA}${ruta}`), opciones, {
+        token: obtenerToken(),
+        fetchImpl,
+      });
     } catch (error) {
-      if (esCancelacion(error)) {
-        throw error;
+      if (error instanceof ErrorApi && error.status === 401) {
+        alNoAutorizado?.();
       }
-      throw new ErrorApi(0, [MENSAJE_SIN_CONEXION]);
+      throw error;
     }
-
-    if (respuesta.status === 204) {
-      return undefined as T;
-    }
-
-    const cuerpo = await leerCuerpo(respuesta);
-    if (!respuesta.ok) {
-      throw new ErrorApi(respuesta.status, mensajesDeCuerpo(cuerpo) ?? [MENSAJE_SIN_CONEXION]);
-    }
-    return cuerpo as T;
   }
 
   return {

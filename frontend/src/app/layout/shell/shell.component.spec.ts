@@ -41,7 +41,6 @@ describe('ShellComponent', () => {
       '/pacientes',
       '/trabajadores',
       '/medicamentos',
-      '/medicamentos-react',
       '/historial',
     ]);
   });
@@ -55,7 +54,6 @@ describe('ShellComponent', () => {
     expect(enlaces.map((a) => a.getAttribute('href'))).toEqual([
       '/pacientes',
       '/medicamentos',
-      '/medicamentos-react',
       '/historial',
     ]);
   });

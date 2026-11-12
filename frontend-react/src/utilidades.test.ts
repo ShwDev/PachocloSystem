@@ -19,23 +19,35 @@ describe('utilidades de la interfaz React', () => {
     expect(nuevaClaveIdempotencia()).toMatch(/^[A-Za-z0-9_-]{16,100}$/);
   });
 
-  it('lee el token vigente de la sesión compartida con Angular', () => {
-    guardarSesion({ token: 'jwt-1', expiraEn: Date.now() + 60_000, usuario: { rol: 'ADMIN' } });
+  it('lee el token y el rol de la sesión guardada', () => {
+    guardarSesion({
+      token: 'jwt-1',
+      expiraEn: Date.now() + 60_000,
+      usuario: { username: 'admin', rol: 'ADMIN' },
+    });
 
     expect(leerToken()).toBe('jwt-1');
     expect(leerRol()).toBe('ADMIN');
   });
 
   it('ignora una sesión expirada, corrupta o con rol desconocido', () => {
-    guardarSesion({ token: 'jwt-1', expiraEn: Date.now() - 1, usuario: { rol: 'ADMIN' } });
+    guardarSesion({
+      token: 'jwt-1',
+      expiraEn: Date.now() - 1,
+      usuario: { username: 'admin', rol: 'ADMIN' },
+    });
     expect(leerToken()).toBeNull();
 
     sessionStorage.setItem(CLAVE_SESION, 'no es json');
     expect(leerToken()).toBeNull();
     expect(leerRol()).toBeNull();
 
-    guardarSesion({ token: 'jwt-2', expiraEn: Date.now() + 60_000, usuario: { rol: 'OTRO' } });
-    expect(leerToken()).toBe('jwt-2');
+    guardarSesion({
+      token: 'jwt-2',
+      expiraEn: Date.now() + 60_000,
+      usuario: { username: 'x', rol: 'OTRO' },
+    });
+    expect(leerToken()).toBeNull();
     expect(leerRol()).toBeNull();
   });
 });

@@ -1,0 +1,14 @@
+# Fuera del contexto de build: dependencias y salidas locales (se reconstruyen en la imagen).
+node_modules/
+dist/
+coverage/
+.git/
+.gitignore
+.idea/
+.vscode/
+.env.local
+.env.*.local
+*.log
+README.md
+Dockerfile
+.dockerignore

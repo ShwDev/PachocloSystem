@@ -1,16 +1,107 @@
-:host {
-  display: block;
-  color: #1a1c1e;
-}
-
 * {
   box-sizing: border-box;
 }
 
-.medicamentos {
+body {
+  margin: 0;
+  background: #f8f9ff;
+  color: #1a1c1e;
   font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
   line-height: 1.45;
+}
+
+/* ---- Estructura de la aplicación ---- */
+.barra-app {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 24px;
+  background: #00639b;
+  color: #fff;
+}
+
+.barra-app .marca {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.barra-app .usuario {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.barra-app .secundario {
+  opacity: 0.85;
+}
+
+.barra-app .boton.secundario {
+  border-color: rgba(255, 255, 255, 0.7);
+  color: #fff;
+}
+
+.barra-app .boton.secundario:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.contenido {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.pagina-login {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.tarjeta-login {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+  padding: 32px 24px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.tarjeta-login .subtitulo {
+  margin: -8px 0 0;
+}
+
+.tarjeta-login .aviso-servicio {
+  margin: 0;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.campo span {
+  color: #44474e;
+  font-size: 12px;
+}
+
+.aviso-info {
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #d9e2ff;
+  color: #001a41;
+}
+
+.boton.ancho {
+  width: 100%;
+  min-height: 44px;
 }
 
 .encabezado {
