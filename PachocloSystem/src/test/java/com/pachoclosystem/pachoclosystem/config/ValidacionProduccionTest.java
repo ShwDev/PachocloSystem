@@ -13,14 +13,15 @@ class ValidacionProduccionTest {
     private static final String SECRETO_JWT = "secreto-jwt-de-prueba-de-al-menos-32-bytes";
     private static final String CLAVE_SERVICIO = "clave-servicio-de-prueba-de-32-caracteres";
     private static final String PASSWORD_BD = "password-bd-de-prueba";
+    private static final String URI_MONGO = "mongodb+srv://usuario:" + PASSWORD_BD
+            + "@cluster0.mongodb.net/pachoclosystem?retryWrites=true&w=majority";
 
     private static MockEnvironment completa() {
         return new MockEnvironment()
                 .withProperty("app.jwt.secret", SECRETO_JWT)
                 .withProperty("medicamentos.api-key", CLAVE_SERVICIO)
                 .withProperty("medicamentos.url", "http://medicamentos.railway.internal:8081")
-                .withProperty("spring.datasource.url", "jdbc:postgresql://postgres.railway.internal:5432/pachoclosystem")
-                .withProperty("spring.datasource.password", PASSWORD_BD)
+                .withProperty("spring.mongodb.uri", URI_MONGO)
                 .withProperty("app.cors.origenes", "https://pachoclosystem.vercel.app");
     }
 
@@ -37,8 +38,7 @@ class ValidacionProduccionTest {
                 .withMessageContaining("JWT_SECRET")
                 .withMessageContaining("MEDICAMENTOS_API_KEY")
                 .withMessageContaining("MEDICAMENTOS_URL")
-                .withMessageContaining("PACHOCLOSYSTEM_DB_URL")
-                .withMessageContaining("PACHOCLOSYSTEM_DB_PASSWORD")
+                .withMessageContaining("SPRING_MONGODB_URI")
                 .withMessageContaining("CORS_ORIGENES");
     }
 
@@ -72,6 +72,20 @@ class ValidacionProduccionTest {
         assertThatIllegalStateException().isThrownBy(() -> ValidacionProduccion.validar(
                 completa().withProperty("app.cors.origenes", " ")))
                 .withMessageContaining("CORS_ORIGENES");
+    }
+
+    @Test
+    void laBaseNoPuedeSerLocal() {
+        assertThatIllegalStateException().isThrownBy(() -> ValidacionProduccion.validar(
+                completa().withProperty("spring.mongodb.uri", "mongodb://localhost:27017/pachoclosystem")))
+                .withMessageContaining("SPRING_MONGODB_URI");
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo("mongodb://127.0.0.1:27017/x")).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo("mongodb://[::1]:27017/x")).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo("mongodb://otro:27017,127.0.0.1:27017/x")).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo(null)).isTrue();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo(
+                "mongodb://usuario:clave@mongo.railway.internal:27017/pachoclosystem?authSource=admin")).isFalse();
+        assertThat(ValidacionProduccion.apuntaALocalhostMongo(URI_MONGO)).isFalse();
     }
 
     @Test

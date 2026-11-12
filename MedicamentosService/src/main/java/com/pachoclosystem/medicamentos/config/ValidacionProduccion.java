@@ -23,8 +23,7 @@ import java.util.Locale;
  * <ul>
  *   <li>{@code MEDICAMENTOS_API_KEY} de al menos {@value #LONGITUD_MINIMA_CLAVE}
  *       caracteres: en producción la API nunca queda sin clave de servicio.</li>
- *   <li>{@code MEDICAMENTOS_DB_URL} que no apunte a localhost y
- *       {@code MEDICAMENTOS_DB_PASSWORD} definida.</li>
+ *   <li>{@code SPRING_MONGODB_URI} definida y que no apunte a localhost.</li>
  * </ul>
  */
 @Component
@@ -54,11 +53,8 @@ public class ValidacionProduccion implements BeanFactoryPostProcessor, Environme
             errores.add("MEDICAMENTOS_API_KEY es obligatoria, con al menos " + LONGITUD_MINIMA_CLAVE
                     + " caracteres, y debe ser la misma en PachocloSystem.");
         }
-        if (apuntaALocalhost(entorno.getProperty("spring.datasource.url"))) {
-            errores.add("MEDICAMENTOS_DB_URL debe ser la base de datos de producción, no localhost.");
-        }
-        if (vacia(entorno.getProperty("spring.datasource.password"))) {
-            errores.add("MEDICAMENTOS_DB_PASSWORD es obligatoria.");
+        if (apuntaALocalhostMongo(entorno.getProperty("spring.mongodb.uri"))) {
+            errores.add("SPRING_MONGODB_URI debe ser la base de datos de producción, no localhost.");
         }
         if (!errores.isEmpty()) {
             throw new IllegalStateException("Configuración de producción incompleta (perfil prod): "
@@ -87,5 +83,46 @@ public class ValidacionProduccion implements BeanFactoryPostProcessor, Environme
         }
         String sinCorchetes = host.replace("[", "").replace("]", "");
         return sinCorchetes.equals("localhost") || sinCorchetes.startsWith("127.") || sinCorchetes.equals("::1");
+    }
+
+    /**
+     * Sin URI, o con algún host localhost / 127.x / ::1. Admite la forma de
+     * MongoDB con lista de hosts ({@code mongodb://a:27017,b:27017/db}) y
+     * {@code mongodb+srv://}, donde {@link URI#create(String)} no basta.
+     */
+    static boolean apuntaALocalhostMongo(String uri) {
+        if (vacia(uri)) {
+            return true;
+        }
+        String autoridad = uri.trim();
+        int esquema = autoridad.indexOf("://");
+        if (esquema >= 0) {
+            autoridad = autoridad.substring(esquema + 3);
+        }
+        int finAutoridad = autoridad.indexOf('/');
+        if (finAutoridad >= 0) {
+            autoridad = autoridad.substring(0, finAutoridad);
+        }
+        int arroba = autoridad.lastIndexOf('@');
+        if (arroba >= 0) {
+            autoridad = autoridad.substring(arroba + 1);
+        }
+        for (String hostPuerto : autoridad.split(",")) {
+            String host = hostPuerto.trim();
+            if (host.startsWith("[")) {
+                int cierre = host.indexOf(']');
+                host = cierre > 0 ? host.substring(1, cierre) : host;
+            } else {
+                int dosPuntos = host.indexOf(':');
+                if (dosPuntos >= 0) {
+                    host = host.substring(0, dosPuntos);
+                }
+            }
+            host = host.toLowerCase(Locale.ROOT);
+            if (host.equals("localhost") || host.startsWith("127.") || host.equals("::1")) {
+                return true;
+            }
+        }
+        return false;
     }
 }
