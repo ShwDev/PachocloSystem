@@ -83,6 +83,8 @@ jobs:
       - run: npm ci
       - name: Tests
         run: npm test -- --watch=false
+      - name: Tests de React
+        run: npm run test:react
       - name: Lint
         run: npm run lint
       - name: Formato
