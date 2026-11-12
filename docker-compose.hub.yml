@@ -42,9 +42,7 @@ services:
       # Enlace con el microservicio y con su base: se resuelven por nombre de servicio.
       MEDICAMENTOS_URL: http://medicamentos-service:8081
       MEDICAMENTOS_API_KEY: ${MEDICAMENTOS_API_KEY:?defina MEDICAMENTOS_API_KEY en .env}
-      PACHOCLOSYSTEM_DB_URL: jdbc:postgresql://db-pachoclo:5432/${PACHOCLO_DB_NAME:-pachoclosystem}
-      PACHOCLOSYSTEM_DB_USER: ${PACHOCLO_DB_USER:-pachoclosystem_app}
-      PACHOCLOSYSTEM_DB_PASSWORD: ${PACHOCLO_DB_PASSWORD:?defina PACHOCLO_DB_PASSWORD en .env}
+      SPRING_MONGODB_URI: ${PACHOCLO_MONGO_URI:?defina PACHOCLO_MONGO_URI en .env}
       CORS_ORIGENES: ${CORS_ORIGENES:-}
       # Solo la IP de nginx: de ella se acepta X-Forwarded-For. No debe ser todo el rango de la
       # red, porque incluiría la puerta de enlace (la IP con la que nginx ve al cliente).
@@ -57,8 +55,8 @@ services:
       publica:
       interna:
     depends_on:
-      db-pachoclo:
-        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
       medicamentos-service:
         condition: service_healthy
     healthcheck:
@@ -75,14 +73,12 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       MEDICAMENTOS_API_KEY: ${MEDICAMENTOS_API_KEY:?defina MEDICAMENTOS_API_KEY en .env}
-      MEDICAMENTOS_DB_URL: jdbc:postgresql://db-medicamentos:5432/${MEDICAMENTOS_DB_NAME:-medicamentos}
-      MEDICAMENTOS_DB_USER: ${MEDICAMENTOS_DB_USER:-medicamentos_app}
-      MEDICAMENTOS_DB_PASSWORD: ${MEDICAMENTOS_DB_PASSWORD:?defina MEDICAMENTOS_DB_PASSWORD en .env}
+      SPRING_MONGODB_URI: ${MEDICAMENTOS_MONGO_URI:?defina MEDICAMENTOS_MONGO_URI en .env}
     networks:
       interna:
     depends_on:
-      db-medicamentos:
-        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8081/actuator/health/readiness"]
       interval: 15s
@@ -91,42 +87,50 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # ---------- PostgreSQL de PachocloSystem ----------
-  db-pachoclo:
-    image: postgres:18
-    environment:
-      POSTGRES_DB: ${PACHOCLO_DB_NAME:-pachoclosystem}
-      POSTGRES_USER: ${PACHOCLO_DB_USER:-pachoclosystem_app}
-      POSTGRES_PASSWORD: ${PACHOCLO_DB_PASSWORD:?defina PACHOCLO_DB_PASSWORD en .env}
+  # ---------- MongoDB compartido: las dos bases en la misma instancia ----------
+  # Réplica de un solo nodo (rs0): las transacciones de MongoDB las necesitan.
+  # Sin puerto al host y sin autenticación: solo es alcanzable desde la red interna.
+  mongo:
+    image: mongo:8
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     volumes:
-      # PostgreSQL 18 guarda los datos en /var/lib/postgresql/18/docker.
-      - pachoclo-datos:/var/lib/postgresql
+      - mongo-datos:/data/db
     networks:
       interna:
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s
       timeout: 5s
       retries: 20
     restart: unless-stopped
 
-  # ---------- PostgreSQL de MedicamentosService ----------
-  db-medicamentos:
-    image: postgres:18
-    environment:
-      POSTGRES_DB: ${MEDICAMENTOS_DB_NAME:-medicamentos}
-      POSTGRES_USER: ${MEDICAMENTOS_DB_USER:-medicamentos_app}
-      POSTGRES_PASSWORD: ${MEDICAMENTOS_DB_PASSWORD:?defina MEDICAMENTOS_DB_PASSWORD en .env}
-    volumes:
-      - medicamentos-datos:/var/lib/postgresql
+  # ---------- Inicialización del replica set ----------
+  # Idempotente: si rs0 ya existe no hace nada; si no, lo crea y espera a que el
+  # nodo sea primario. Los backends no arrancan hasta que termina (y sale con 0).
+  mongo-init:
+    image: mongo:8
+    entrypoint:
+      - bash
+      - -c
+      - |
+        mongosh --host mongo:27017 --quiet --eval '
+          try { rs.status() } catch (e) {
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})
+          }'
+        for intento in $$(seq 1 30); do
+          if mongosh --host mongo:27017 --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "El nodo de MongoDB no llegó a primario" >&2
+        exit 1
     networks:
       interna:
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
 
 networks:
   # Frontend y API. Subred fija para poder declararla como proxy confiable del login.
@@ -141,6 +145,5 @@ networks:
     internal: true
 
 volumes:
-  pachoclo-datos:
-  medicamentos-datos:
+  mongo-datos:
   pachoclo-logs:

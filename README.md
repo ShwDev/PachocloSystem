@@ -4,7 +4,7 @@ Sistema de gestión de un hospital: pacientes, trabajadores (doctores y enfermer
 clínico, inventario de medicamentos y usuarios con roles. Nació como una aplicación Swing con
 arquitectura MVC y hoy son tres procesos que se hablan por HTTP.
 
-> Proyecto de desarrollo y aprendizaje. Los dos servicios guardan sus datos en **PostgreSQL**
+> Proyecto de desarrollo y aprendizaje. Los dos servicios guardan sus datos en **MongoDB**
 > (cada uno en su propia base), así que sobreviven a los reinicios (ver
 > [Limitaciones conocidas](#limitaciones-conocidas)).
 
@@ -42,13 +42,22 @@ Cómo se comunican:
 
 - **Java 25** (`JAVA_HOME` apuntando a un JDK 25). No hace falta instalar Maven: cada servicio
   incluye su wrapper (`mvnw`).
-- **PostgreSQL** (probado con la 18) con una base y un rol por servicio:
-  - MedicamentosService: bases `medicamentos` y `medicamentos_test`, rol `medicamentos_app` (ver el
-    [README de MedicamentosService](MedicamentosService/README.md#base-de-datos)).
-  - PachocloSystem: bases `pachoclosystem` y `pachoclosystem_test`, rol `pachoclosystem_app` (ver el
-    [README de PachocloSystem](PachocloSystem/README.md#base-de-datos)).
+- **MongoDB 8** con un **replica set** (aunque sea de un solo nodo) y una base por servicio:
+  `medicamentos` y `pachoclosystem`. Las transacciones de MongoDB no funcionan contra un `mongod`
+  suelto. Los tests no lo necesitan: Testcontainers arranca el suyo.
 - **Node** `^22.22.3`, `^24.15.0` o `>=26` (lo exige Angular 22), con npm.
 - Git Bash o PowerShell en Windows; también vale cualquier shell POSIX.
+
+La forma más rápida de tener MongoDB es un contenedor con replica set:
+
+```bash
+docker run -d --name pachoclo-mongo -p 27017:27017 mongo:8 --replSet rs0 --bind_ip_all
+docker exec pachoclo-mongo mongosh --quiet --eval \
+  'rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]})'
+```
+
+También puede levantar todo el sistema con `docker compose up -d` (ver
+[`docker/README.md`](docker/README.md)); entonces no hacen falta Java ni Node.
 
 ## Cómo levantar el sistema
 
@@ -58,8 +67,7 @@ desarrollo**: use los suyos y no los guarde en el repositorio.
 | Variable | Dónde | Ejemplo | Notas |
 |---|---|---|---|
 | `MEDICAMENTOS_API_KEY` | los dos servicios | `clave-servicio-ejemplo` | Debe ser **igual** en ambos. |
-| `MEDICAMENTOS_DB_PASSWORD` | MedicamentosService | `<contraseña-de-medicamentos_app>` | Contraseña del rol de PostgreSQL. Sin ella el servicio no arranca. |
-| `PACHOCLOSYSTEM_DB_PASSWORD` | PachocloSystem | `<contraseña-de-pachoclosystem_app>` | Contraseña del rol de PostgreSQL. Sin ella el servicio no arranca. |
+| `SPRING_MONGODB_URI` | cada servicio | `mongodb://localhost:27017/pachoclosystem?replicaSet=rs0` | URI de su base (incluye el nombre). Sin `replicaSet` las transacciones fallan. |
 | `ADMIN_PASSWORD` | PachocloSystem | `admin-ejemplo-2026` | Mínimo 10 caracteres. Solo se usa la primera vez, al crear el administrador en la base. Si se omite, se genera una aleatoria y se imprime una vez en el log (WARN). |
 | `JWT_SECRET` | PachocloSystem | `secreto-jwt-ejemplo-solo-desarrollo` | Mínimo 32 bytes. Si se omite, los tokens no sobreviven a un reinicio. |
 
@@ -78,20 +86,23 @@ Exponen health checks en `/actuator/health` (`/liveness` y `/readiness`). El fro
 para Vercel con `npm run build:vercel` y `API_BASE_URL`. Detalle en la sección "Producción" de cada
 README y en [Despliegue en Vercel](frontend/README.md#despliegue-en-vercel).
 
-El despliegue actual (backends y PostgreSQL en Railway, frontend en Vercel), con sus variables y
-verificaciones, está en [`docs/despliegue.md`](docs/despliegue.md).
+El despliegue actual (backends en Railway, MongoDB gestionado y frontend en Vercel), con sus
+variables y verificaciones, está en [`docs/despliegue.md`](docs/despliegue.md).
 
 ### Git Bash
 
 ```bash
 # Terminal 1: MedicamentosService (8081)
 cd MedicamentosService
-MEDICAMENTOS_API_KEY=clave-servicio-ejemplo MEDICAMENTOS_DB_PASSWORD=<contraseña> ./mvnw spring-boot:run
+MEDICAMENTOS_API_KEY=clave-servicio-ejemplo \
+  SPRING_MONGODB_URI='mongodb://localhost:27017/medicamentos?replicaSet=rs0' \
+  ./mvnw spring-boot:run
 
 # Terminal 2: PachocloSystem (8080)
 cd PachocloSystem
 MEDICAMENTOS_API_KEY=clave-servicio-ejemplo ADMIN_PASSWORD=admin-ejemplo-2026 \
-  JWT_SECRET=secreto-jwt-ejemplo-solo-desarrollo PACHOCLOSYSTEM_DB_PASSWORD=<contraseña> \
+  JWT_SECRET=secreto-jwt-ejemplo-solo-desarrollo \
+  SPRING_MONGODB_URI='mongodb://localhost:27017/pachoclosystem?replicaSet=rs0' \
   ./mvnw spring-boot:run
 
 # Terminal 3: frontend (4200)
@@ -106,7 +117,7 @@ npm start
 # Terminal 1: MedicamentosService (8081)
 cd MedicamentosService
 $env:MEDICAMENTOS_API_KEY = "clave-servicio-ejemplo"
-$env:MEDICAMENTOS_DB_PASSWORD = "<contraseña>"
+$env:SPRING_MONGODB_URI = "mongodb://localhost:27017/medicamentos?replicaSet=rs0"
 .\mvnw.cmd spring-boot:run
 
 # Terminal 2: PachocloSystem (8080)
@@ -114,7 +125,7 @@ cd PachocloSystem
 $env:MEDICAMENTOS_API_KEY = "clave-servicio-ejemplo"
 $env:ADMIN_PASSWORD = "admin-ejemplo-2026"
 $env:JWT_SECRET = "secreto-jwt-ejemplo-solo-desarrollo"
-$env:PACHOCLOSYSTEM_DB_PASSWORD = "<contraseña>"
+$env:SPRING_MONGODB_URI = "mongodb://localhost:27017/pachoclosystem?replicaSet=rs0"
 .\mvnw.cmd spring-boot:run
 
 # Terminal 3: frontend (4200)
@@ -164,8 +175,9 @@ cd frontend && npm test                   # unitarios (Vitest)
 cd frontend && npm run build              # build de producción en frontend/dist
 ```
 
-El frontend también tiene `npm run lint` y `npm run format:check`. No hace falta arrancar nada
-para ejecutar los tests.
+El frontend también tiene `npm run lint` y `npm run format:check`. No hace falta arrancar Mongo ni
+los servicios, pero los tests de los dos backends necesitan **Docker** (Testcontainers arranca su
+propio MongoDB).
 
 ## Documentación por módulo
 
@@ -182,11 +194,13 @@ de cada punto están allí.
 
 **Datos y sesión**
 
-- **Todo se guarda en PostgreSQL** y sobrevive a los reinicios. `ADMIN_PASSWORD` solo se aplica al
+- **Todo se guarda en MongoDB** y sobrevive a los reinicios. `ADMIN_PASSWORD` solo se aplica al
   crear el administrador (primer arranque); sin ella la contraseña es aleatoria, queda en el log y
   hay que cambiarla en el primer acceso. Sin `JWT_SECRET` los tokens no sobreviven a un reinicio.
-- **Sin PostgreSQL** los servicios no arrancan; si la base cae con ellos en marcha, responden `503`
-  hasta que vuelva.
+- **Sin MongoDB** los servicios no arrancan (los índices se crean al arrancar); si la base cae con
+  ellos en marcha, responden `503` hasta que vuelva.
+- **MongoDB necesita un replica set.** Las transacciones y el cerrojo administrativo de
+  PachocloSystem no funcionan contra un `mongod` suelto. El compose y los tests usan uno de un nodo.
 - **Una sola instancia de PachocloSystem.** El orden de las peticiones con la misma
   `Idempotency-Key` y el límite de intentos de login viven en la memoria del proceso.
 - **Sesión de 30 minutos sin renovación.** No hay refresh token: el frontend avisa 5 minutos antes
@@ -214,7 +228,7 @@ de cada punto están allí.
   Si el timeout salta con las cabeceras ya recibidas pero sin cuerpo, recibe **502** y no hay
   reintento. El frontend siempre envía la clave.
 - **Las claves de idempotencia caducan a las 24 h.** "Reintentar sin riesgo de descontar dos
-  veces" solo se cumple dentro de ese plazo. MedicamentosService las guarda en PostgreSQL y
+  veces" solo se cumple dentro de ese plazo. MedicamentosService las guarda en MongoDB y
   sobreviven a sus reinicios; las del historial de PachocloSystem, también (sin tope de claves).
 - **Las claves del frontend viven en el diálogo.** Si se recarga la página tras un resultado
   incierto, el siguiente intento usa otra clave: hay que revisar el historial y el stock antes de

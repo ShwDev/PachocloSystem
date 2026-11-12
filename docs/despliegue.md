@@ -1,14 +1,16 @@
 # Despliegue: Railway + Vercel
 
-Cómo está desplegado el sistema y cómo repetirlo. Los backends y sus bases viven en **Railway**; el
-frontend, en **Vercel**. Aquí solo aparecen nombres de variables y referencias: los valores
-secretos se configuran en cada plataforma y nunca se guardan en el repositorio.
+Cómo está desplegado el sistema y cómo repetirlo. Los backends viven en **Railway**; el frontend, en
+**Vercel**; y la base de datos, en un **MongoDB gestionado** (Atlas o cualquier proveedor que ofrezca
+una cadena de conexión). Aquí solo aparecen nombres de variables y referencias: los valores secretos
+se configuran en cada plataforma y nunca se guardan en el repositorio.
 
 ```
  Navegador ──► Vercel (frontend) ──https──► Railway: PachocloSystem ──red privada──► MedicamentosService
-                                              │  dominio público              (sin dominio público)
-                                              ▼                                      ▼
-                                       postgres-pacientes                  postgres-medicamentos
+                                               │  dominio público              (sin dominio público)
+                                               ▼                                      ▼
+                                    MongoDB gestionado (replica set) ◄───────────────┘
+                                  base "pachoclosystem" / base "medicamentos"
 ```
 
 | Pieza | Plataforma | URL |
@@ -17,11 +19,26 @@ secretos se configuran en cada plataforma y nunca se guardan en el repositorio.
 | PachocloSystem | Railway (público) | <https://pachoclosystem-production.up.railway.app> |
 | MedicamentosService | Railway (solo red privada) | `http://<RAILWAY_PRIVATE_DOMAIN>:8081` |
 
+## Base de datos (MongoDB)
+
+- **Replica set obligatorio.** Las transacciones y el cerrojo administrativo de PachocloSystem
+  necesitan un `replicaSet`; un `mongod` suelto no sirve. Atlas lo es por defecto. Si usa el
+  template de MongoDB de Railway o un servidor propio, compruebe que inicia con `--replSet` y que la
+  URI lo incluye.
+- **Una instancia, dos bases:** `pachoclosystem` y `medicamentos`, cada una apuntada por su servicio
+  con `SPRING_MONGODB_URI`.
+- **Índices al arrancar.** No hay migraciones manuales (Flyway era de PostgreSQL): MongoDB crea los
+  índices declarados (`@Indexed` y los de `MongoConfig`) al arrancar cada servicio. Si la base no
+  responde, el arranque falla en vez de quedarse a medias.
+- **Sin autenticación no salga de la red privada.** En producción use un usuario y contraseña de
+  base de datos en la URI; con `SPRING_PROFILES_ACTIVE=prod`, el servicio se niega a arrancar si
+  `SPRING_MONGODB_URI` falta o apunta a localhost.
+
 ## Railway
 
-Un proyecto con cuatro servicios: dos PostgreSQL (`postgres-pacientes` y `postgres-medicamentos`,
-uno por servicio) y los dos backends, creados desde el repositorio de GitHub. Los backends se
-construyen con **Railpack** (detecta el `pom.xml`); no hace falta Dockerfile.
+Un proyecto con tres servicios: la base gestionada (externa al proyecto o un servicio MongoDB del
+catálogo) y los dos backends, creados desde el repositorio de GitHub. Los backends se construyen con
+**Railpack** (detecta el `pom.xml`); no hace falta Dockerfile.
 
 | Ajuste | PachocloSystem | MedicamentosService |
 |---|---|---|
@@ -30,8 +47,6 @@ construyen con **Railpack** (detecta el `pom.xml`); no hace falta Dockerfile.
 | Healthcheck Path | `/actuator/health/readiness` | `/actuator/health/readiness` |
 | Réplicas | **1** (límite de login e idempotencia en memoria) | 1 |
 
-Las tablas las crea **Flyway** al arrancar cada servicio; no hay migraciones manuales.
-
 ### Variables de MedicamentosService
 
 | Variable | Valor |
@@ -39,9 +54,7 @@ Las tablas las crea **Flyway** al arrancar cada servicio; no hay migraciones man
 | `SPRING_PROFILES_ACTIVE` | `prod` |
 | `RAILPACK_JDK_VERSION` | `25` (Railpack usa 21 por defecto y el proyecto exige Java 25) |
 | `PORT` | `8081` (fijo, para que `MEDICAMENTOS_URL` sea estable) |
-| `MEDICAMENTOS_DB_URL` | `jdbc:postgresql://${{postgres-medicamentos.PGHOST}}:${{postgres-medicamentos.PGPORT}}/${{postgres-medicamentos.PGDATABASE}}` |
-| `MEDICAMENTOS_DB_USER` | `${{postgres-medicamentos.PGUSER}}` |
-| `MEDICAMENTOS_DB_PASSWORD` | `${{postgres-medicamentos.PGPASSWORD}}` |
+| `SPRING_MONGODB_URI` | 🔒 `mongodb+srv://<usuario>:<contraseña>@<cluster>/medicamentos?retryWrites=true&w=majority` |
 | `MEDICAMENTOS_API_KEY` | 🔒 secreto, 32 caracteres o más, **igual** en los dos servicios |
 
 ### Variables de PachocloSystem
@@ -51,9 +64,7 @@ Las tablas las crea **Flyway** al arrancar cada servicio; no hay migraciones man
 | `SPRING_PROFILES_ACTIVE` | `prod` |
 | `RAILPACK_JDK_VERSION` | `25` |
 | `PORT` | `8080` |
-| `PACHOCLOSYSTEM_DB_URL` | `jdbc:postgresql://${{postgres-pacientes.PGHOST}}:${{postgres-pacientes.PGPORT}}/${{postgres-pacientes.PGDATABASE}}` |
-| `PACHOCLOSYSTEM_DB_USER` | `${{postgres-pacientes.PGUSER}}` |
-| `PACHOCLOSYSTEM_DB_PASSWORD` | `${{postgres-pacientes.PGPASSWORD}}` |
+| `SPRING_MONGODB_URI` | 🔒 `mongodb+srv://<usuario>:<contraseña>@<cluster>/pachoclosystem?retryWrites=true&w=majority` |
 | `MEDICAMENTOS_URL` | `http://${{MedicamentosService.RAILWAY_PRIVATE_DOMAIN}}:8081` |
 | `CORS_ORIGENES` | `https://pachoclo-system-frontend.vercel.app,https://pachoclosystem-production.up.railway.app` |
 | `APP_LOGIN_PROXIES_CONFIABLES` | `100.64.0.0/10,152.233.23.0/24` (ver abajo) |
@@ -63,11 +74,17 @@ Las tablas las crea **Flyway** al arrancar cada servicio; no hay migraciones man
 
 Notas:
 
-- La URL de la base se compone con las variables `PG*` de Railway: su `DATABASE_URL` empieza por
-  `postgresql://` y Spring necesita una URL JDBC. Usuario y contraseña van aparte.
+- **Nombre de la propiedad:** con Spring Boot 4 la URI de MongoDB se lee de
+  `spring.mongodb.uri`, y la variable de entorno equivalente es `SPRING_MONGODB_URI`. La antigua
+  `spring.data.mongodb.uri` se ignora.
+- La base va **en la propia URI** (la ruta después del host). No hay variables `*_DB_URL`, `*_DB_USER`
+  ni `*_DB_PASSWORD`: todas se sustituyen por esa única cadena.
 - `MEDICAMENTOS_URL` usa `http`: el tráfico va por la red privada de Railway, que ya está cifrada.
 - `CORS_ORIGENES` no admite comodines: los despliegues de *preview* de Vercel compilan, pero el
   navegador bloquea sus peticiones a la API.
+- Si el proveedor de MongoDB exige permitir IPs de origen, añada las de salida de Railway (o use
+  *Private Endpoint* / *Peering*). Atlas también admite `mongodb+srv://`, que la validación de
+  producción acepta como no localhost.
 
 ### Proxies confiables (límite de intentos de login)
 
@@ -101,9 +118,10 @@ redesplegarlo.
 
 ## Orden para desplegar desde cero
 
-1. Railway: crear los dos PostgreSQL.
+1. MongoDB gestionado: crear el replica set y las bases `pachoclosystem` y `medicamentos`, con un
+   usuario que tenga permisos de lectura y escritura sobre ambas (o un usuario por base).
 2. MedicamentosService: Root Directory, sin dominio, healthcheck y variables. Desplegar y comprobar
-   en el log que Flyway aplica sus migraciones.
+   en el log que arranca y crea los índices.
 3. PachocloSystem: Root Directory, **generar el dominio antes de las variables** (hace falta para
    `CORS_ORIGENES`), healthcheck y variables. Desplegar.
 4. Vercel: importar el repositorio con Root Directory `frontend` y `API_BASE_URL`. Desplegar.

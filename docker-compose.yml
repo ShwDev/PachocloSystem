@@ -42,6 +42,8 @@ services:
       publica:
       interna:
     depends_on:
+      mongo-init:
+        condition: service_completed_successfully
       medicamentos-service:
         condition: service_healthy
     healthcheck:
@@ -62,6 +64,9 @@ services:
       SPRING_MONGODB_URI: ${MEDICAMENTOS_MONGO_URI:?defina MEDICAMENTOS_MONGO_URI en .env}
     networks:
       interna:
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8081/actuator/health/readiness"]
       interval: 15s
@@ -70,14 +75,63 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # ---------- MongoDB compartido: las dos bases en la misma instancia ----------
+  # Réplica de un solo nodo (rs0): las transacciones y el cerrojo administrativo
+  # de MongoDB las necesitan. Sin puerto al host y sin autenticación: solo es
+  # alcanzable desde la red interna.
+  mongo:
+    image: mongo:8
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo-datos:/data/db
+    networks:
+      interna:
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # ---------- Inicialización del replica set ----------
+  # Idempotente: si rs0 ya existe no hace nada; si no, lo crea y espera a que el
+  # nodo sea primario. Los backends no arrancan hasta que termina (y sale con 0).
+  mongo-init:
+    image: mongo:8
+    entrypoint:
+      - bash
+      - -c
+      - |
+        mongosh --host mongo:27017 --quiet --eval '
+          try { rs.status() } catch (e) {
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})
+          }'
+        for intento in $$(seq 1 30); do
+          if mongosh --host mongo:27017 --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "El nodo de MongoDB no llegó a primario" >&2
+        exit 1
+    networks:
+      interna:
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
+
 networks:
   publica:
     driver: bridge
     ipam:
       config:
         - subnet: 172.28.10.0/24
+  # MongoDB y medicamentos-service. "internal" = sin salida a internet ni al host.
   interna:
     driver: bridge
+    internal: true
 
 volumes:
+  mongo-datos:
   pachoclo-logs:
