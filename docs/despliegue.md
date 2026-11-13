@@ -108,12 +108,12 @@ clientes, hay que añadir su rango.
 ## Vercel
 
 Los dos proyectos (`pachoclo-system-frontend` y `pachoclo-medicamentos-react`) están en el equipo
-**Pachoclo** de Vercel y **no están enlazados a GitHub**. Los despliega el workflow
-[`deploy-vercel.yml`](../.github/workflows/deploy-vercel.yml): cuando el CI de `main` termina en
-verde, sube `frontend/` y `frontend-react/` con la CLI de Vercel y Vercel los compila con las
-variables de cada proyecto. También se puede lanzar a mano desde *Actions → Despliegue Vercel → Run
-workflow*. Necesita dos secretos del repositorio: `VERCEL_TOKEN` (token de la cuenta de Vercel) y
-`VERCEL_ORG_ID` (`team_Qej3EXvhAoXmYxsvnNoquKVx`).
+**Pachoclo** de Vercel, enlazados al repositorio `ShwDev/PachocloSystem` (rama de producción
+`main`). Cada push a `main` los despliega; cada push a otra rama genera un *preview*. Los dos usan
+como *Ignored Build Step* `git diff HEAD^ HEAD --quiet -- .`, así que un proyecto solo se recompila
+cuando cambia su carpeta (`frontend/` o `frontend-react/`).
+
+Los servicios de Railway también están conectados a `ShwDev/PachocloSystem` (rama `main`).
 
 `frontend/vercel.json` define la instalación, el build y la salida del proyecto Angular, y
 reescribe cualquier ruta a `index.html` (SPA).
