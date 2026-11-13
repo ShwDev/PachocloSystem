@@ -1,0 +1,58 @@
+# Despliegue de los dos frontends en Vercel (equipo "Pachoclo") cuando el CI de
+# main termina en verde. Los proyectos de Vercel no están enlazados a GitHub, así
+# que este workflow sube cada carpeta con la CLI y Vercel la compila con las
+# variables del proyecto (API_BASE_URL / VITE_API_BASE_URL).
+#
+# Secretos del repositorio: VERCEL_TOKEN (token de la cuenta de Vercel) y
+# VERCEL_ORG_ID (id del equipo). Los ids de proyecto no son secretos.
+name: Despliegue Vercel
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vercel
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    name: ${{ matrix.nombre }}
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nombre: Frontend Angular
+            carpeta: frontend
+            proyecto: prj_WTPL6sz3CYO58uAPHM82Mzgcstkj
+          - nombre: Frontend React
+            carpeta: frontend-react
+            proyecto: prj_TDmAhOs6OjjjBmrEcOAvMPNMNna2
+    defaults:
+      run:
+        working-directory: ${{ matrix.carpeta }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ matrix.proyecto }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # En workflow_run se despliega exactamente el commit que pasó el CI.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Desplegar en producción
+        run: |
+          url=$(npx --yes vercel@65.8.0 deploy --prod --yes --token "${{ secrets.VERCEL_TOKEN }}")
+          echo "Desplegado: $url"
+          echo "### ${{ matrix.nombre }}: $url" >> "$GITHUB_STEP_SUMMARY"

@@ -8,9 +8,9 @@ arquitectura MVC y hoy son tres procesos que se hablan por HTTP.
 > (cada uno en su propia base), así que sobreviven a los reinicios (ver
 > [Limitaciones conocidas](#limitaciones-conocidas)).
 
-URL: [PachocloSystem](https://pachoclo-system-frontend.vercel.app/)
+URL: [PachocloSystem](https://pachoclo-system-frontend-liard.vercel.app/) · Medicamentos en React: [pachoclo-medicamentos-react](https://pachoclo-medicamentos-react.vercel.app/)
 
-[![Logo](frontend/public/logos/logo-sistema-160.png)](https://pachoclo-system-frontend.vercel.app/)
+[![Logo](frontend/public/logos/logo-sistema-160.png)](https://pachoclo-system-frontend-liard.vercel.app/)
 
 ## Arquitectura
 

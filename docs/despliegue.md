@@ -15,8 +15,9 @@ se configuran en cada plataforma y nunca se guardan en el repositorio.
 
 | Pieza | Plataforma | URL |
 |---|---|---|
-| Frontend | Vercel | <https://pachoclo-system-frontend.vercel.app> |
-| PachocloSystem | Railway (público) | <https://pachoclosystem-production.up.railway.app> |
+| Frontend | Vercel | <https://pachoclo-system-frontend-liard.vercel.app> |
+| Frontend React (Medicamentos) | Vercel | <https://pachoclo-medicamentos-react.vercel.app> |
+| PachocloSystem | Railway (público) | <https://pachoclosystem-production-2dd64b51.up.railway.app> |
 | MedicamentosService | Railway (solo red privada) | `http://<RAILWAY_PRIVATE_DOMAIN>:8081` |
 
 ## Base de datos (MongoDB)
@@ -66,7 +67,7 @@ catálogo) y los dos backends, creados desde el repositorio de GitHub. Los backe
 | `PORT` | `8080` |
 | `SPRING_MONGODB_URI` | 🔒 `mongodb+srv://<usuario>:<contraseña>@<cluster>/pachoclosystem?retryWrites=true&w=majority` |
 | `MEDICAMENTOS_URL` | `http://${{MedicamentosService.RAILWAY_PRIVATE_DOMAIN}}:8081` |
-| `CORS_ORIGENES` | `https://pachoclo-system-frontend.vercel.app,https://pachoclosystem-production.up.railway.app` |
+| `CORS_ORIGENES` | `https://pachoclo-system-frontend-liard.vercel.app,https://pachoclo-medicamentos-react.vercel.app,https://pachoclosystem-production-2dd64b51.up.railway.app` |
 | `APP_LOGIN_PROXIES_CONFIABLES` | `100.64.0.0/10,152.233.23.0/24` (ver abajo) |
 | `MEDICAMENTOS_API_KEY` | 🔒 secreto, la misma que en MedicamentosService |
 | `JWT_SECRET` | 🔒 secreto, 32 bytes o más |
@@ -106,18 +107,39 @@ clientes, hay que añadir su rango.
 
 ## Vercel
 
-Proyecto importado del mismo repositorio. `frontend/vercel.json` define la instalación, el build y
-la salida, y reescribe cualquier ruta a `index.html` (SPA).
+Los dos proyectos (`pachoclo-system-frontend` y `pachoclo-medicamentos-react`) están en el equipo
+**Pachoclo** de Vercel y **no están enlazados a GitHub**. Los despliega el workflow
+[`deploy-vercel.yml`](../.github/workflows/deploy-vercel.yml): cuando el CI de `main` termina en
+verde, sube `frontend/` y `frontend-react/` con la CLI de Vercel y Vercel los compila con las
+variables de cada proyecto. También se puede lanzar a mano desde *Actions → Despliegue Vercel → Run
+workflow*. Necesita dos secretos del repositorio: `VERCEL_TOKEN` (token de la cuenta de Vercel) y
+`VERCEL_ORG_ID` (`team_Qej3EXvhAoXmYxsvnNoquKVx`).
+
+`frontend/vercel.json` define la instalación, el build y la salida del proyecto Angular, y
+reescribe cualquier ruta a `index.html` (SPA).
 
 | Ajuste | Valor |
 |---|---|
 | Root Directory | `frontend` |
 | Preset | Angular u Other (manda `vercel.json`, con `"framework": null`) |
-| `API_BASE_URL` | `https://pachoclosystem-production.up.railway.app` (Production y Preview) |
+| `API_BASE_URL` | `https://pachoclosystem-production-2dd64b51.up.railway.app` (Production y Preview) |
 
 `npm run build:vercel` falla si falta `API_BASE_URL` o si no es un origen https sin barra final.
 Si el dominio del frontend cambia, hay que actualizar `CORS_ORIGENES` en PachocloSystem y
 redesplegarlo.
+
+### Frontend React (`frontend-react/`)
+
+Segundo proyecto de Vercel, importado del mismo repositorio.
+
+| Ajuste | Valor |
+|---|---|
+| Root Directory | `frontend-react` |
+| Preset | Vite (build `npm run build`, salida `dist`) |
+| `VITE_API_BASE_URL` | `https://pachoclosystem-production-2dd64b51.up.railway.app` (Production y Preview) |
+
+Su dominio de Vercel también tiene que estar en `CORS_ORIGENES` de PachocloSystem. Como
+`CORS_ORIGENES` no admite comodines, los despliegues *preview* no pueden iniciar sesión.
 
 ## Orden para desplegar desde cero
 
