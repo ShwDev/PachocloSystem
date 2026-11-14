@@ -1,12 +1,15 @@
-# PachocloSystem desde Docker Hub: mismas piezas que docker-compose.yml, pero las 3 imágenes
+# PachocloSystem desde Docker Hub: mismas piezas que docker-compose.yml, pero las 4 imágenes
 # propias se DESCARGAN (image:) en vez de construirse (build:). No hace falta el código fuente.
 # Para correrlo basta este archivo y un .env (copiar de .env.example):
 #
 #   cp .env.example .env
 #   docker compose -f docker-compose.hub.yml pull
-#   docker compose -f docker-compose.hub.yml up -d      # luego: http://localhost:4200
+#   docker compose -f docker-compose.hub.yml up -d      # Angular: http://localhost:4200
+#                                                        # React:   http://localhost:4300
 #
-# Imágenes: https://hub.docker.com/u/twcfine  (pachoclo-frontend, pachoclo-api, pachoclo-medicamentos)
+# Imágenes: https://hub.docker.com/u/twcfine  (pachoclo-frontend, pachoclo-frontend-react,
+# pachoclo-api, pachoclo-medicamentos). Se construyen y publican con scripts/publicar-imagenes.sh.
+# Para abrir los Swagger en el host, añada -f docker-compose.demo.yml (ver ese archivo).
 name: pachoclosystem
 
 services:
@@ -14,12 +17,31 @@ services:
   frontend:
     image: ${DOCKERHUB_USER:-twcfine}/pachoclo-frontend:${IMAGE_TAG:-1.0}
     ports:
-      # Único puerto publicado al host.
       - "${FRONTEND_PORT:-4200}:8080"
     networks:
       publica:
         # IP fija: es el único proxy de confianza de pachoclo-api (APP_LOGIN_PROXIES_CONFIABLES).
         ipv4_address: ${NGINX_IP:-172.28.10.10}
+    depends_on:
+      pachoclo-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------- Frontend React: app independiente de Medicamentos (nginx) ----------
+  frontend-react:
+    image: ${DOCKERHUB_USER:-twcfine}/pachoclo-frontend-react:${IMAGE_TAG:-1.0}
+    ports:
+      - "${FRONTEND_REACT_PORT:-4300}:8080"
+    networks:
+      publica:
+        # IP fija: segundo proxy de confianza de pachoclo-api.
+        ipv4_address: ${NGINX_REACT_IP:-172.28.10.11}
     depends_on:
       pachoclo-api:
         condition: service_healthy
@@ -44,9 +66,10 @@ services:
       MEDICAMENTOS_API_KEY: ${MEDICAMENTOS_API_KEY:?defina MEDICAMENTOS_API_KEY en .env}
       SPRING_MONGODB_URI: ${PACHOCLO_MONGO_URI:?defina PACHOCLO_MONGO_URI en .env}
       CORS_ORIGENES: ${CORS_ORIGENES:-}
-      # Solo la IP de nginx: de ella se acepta X-Forwarded-For. No debe ser todo el rango de la
-      # red, porque incluiría la puerta de enlace (la IP con la que nginx ve al cliente).
-      APP_LOGIN_PROXIES_CONFIABLES: ${NGINX_IP:-172.28.10.10}
+      # Solo las IP de los dos nginx (Angular y React): de ellas se acepta X-Forwarded-For. No debe
+      # ser todo el rango de la red, porque incluiría la puerta de enlace (la IP con la que nginx ve
+      # al cliente).
+      APP_LOGIN_PROXIES_CONFIABLES: ${NGINX_IP:-172.28.10.10},${NGINX_REACT_IP:-172.28.10.11}
       # Logs a archivo, además de la consola, en el volumen pachoclo-logs.
       LOGGING_FILE_NAME: /var/log/pachoclo/pachoclosystem.log
     volumes:

@@ -57,8 +57,8 @@ con `0`. `pachoclo-api` y `medicamentos-service` no arrancan hasta que termina.
 
 `frontend-react` (la app React de Medicamentos, en <http://localhost:4300>) funciona igual que
 `frontend`: su propio nginx con IP fija `172.28.10.11` (`NGINX_REACT_IP`) sirve la app y reenvía
-`/api/*` a `pachoclo-api`. No está en `docker-compose.hub.yml` porque su imagen no se publica en
-Docker Hub. El diagrama de arriba muestra solo el frontend Angular.
+`/api/*` a `pachoclo-api`. También está en `docker-compose.hub.yml` (imagen
+`pachoclo-frontend-react`). El diagrama de arriba muestra solo el frontend Angular.
 
 Flujo: el navegador solo habla con nginx. nginx sirve la SPA y reenvía `/api/*` a `pachoclo-api`
 (mismo origen, por eso no hace falta CORS). `pachoclo-api` es la única que habla con
@@ -72,7 +72,7 @@ compila dentro de las imágenes.
 
 ```bash
 cp .env.example .env        # y cambie los valores (en PowerShell: Copy-Item .env.example .env)
-docker compose build        # construye las 3 imágenes propias (la primera vez tarda unos minutos)
+docker compose build        # construye las 4 imágenes propias (la primera vez tarda unos minutos)
 docker compose up -d        # arranca los servicios en el orden de depends_on
 docker compose ps           # los 4 de larga duración deben quedar "healthy"
 ```
@@ -196,11 +196,15 @@ volumes:
 ```yaml
   frontend:
     ports:
-      - "${FRONTEND_PORT:-4200}:8080"    # único puerto publicado al host
+      - "${FRONTEND_PORT:-4200}:8080"
+  frontend-react:
+    ports:
+      - "${FRONTEND_REACT_PORT:-4300}:8080"
 ```
 
 Los demás servicios no tienen `ports:`; sus puertos (8080, 8081, 27017) solo existen dentro de las
-redes de Docker.
+redes de Docker. Para la demo, `docker-compose.demo.yml` los publica (ver
+[Override de demo](#override-de-demo-swagger-y-mongodb-en-el-host)).
 
 ### Redes
 
@@ -222,69 +226,93 @@ la base ni el microservicio.
 
 ## Publicación
 
-Las 3 imágenes propias se publican (públicas) en Docker Hub con los tags `1.0` y `latest`. La base
+Las 4 imágenes propias se publican (públicas) en Docker Hub con los tags `1.0` y `latest`. La base
 usa la imagen oficial `mongo:8`, que no se republica.
 
-| Imagen | Docker Hub |
-|---|---|
-| `twcfine/pachoclo-frontend` | <https://hub.docker.com/r/twcfine/pachoclo-frontend> |
-| `twcfine/pachoclo-api` | <https://hub.docker.com/r/twcfine/pachoclo-api> |
-| `twcfine/pachoclo-medicamentos` | <https://hub.docker.com/r/twcfine/pachoclo-medicamentos> |
+| Carpeta | Imagen | Docker Hub |
+|---|---|---|
+| `frontend/` | `twcfine/pachoclo-frontend` | <https://hub.docker.com/r/twcfine/pachoclo-frontend> |
+| `frontend-react/` | `twcfine/pachoclo-frontend-react` | <https://hub.docker.com/r/twcfine/pachoclo-frontend-react> |
+| `PachocloSystem/` | `twcfine/pachoclo-api` | <https://hub.docker.com/r/twcfine/pachoclo-api> |
+| `MedicamentosService/` | `twcfine/pachoclo-medicamentos` | <https://hub.docker.com/r/twcfine/pachoclo-medicamentos> |
 
-> **Importante:** los tags `1.0` y `latest` publicados hasta ahora corresponden a la versión con
-> PostgreSQL. Con la migración a MongoDB hay que **reconstruir y volver a publicar** las tres
-> imágenes antes de usar `docker-compose.hub.yml`; las antiguas no leen `SPRING_MONGODB_URI`.
+Perfil: <https://hub.docker.com/u/twcfine>.
 
-Perfil: <https://hub.docker.com/u/twcfine>. Código: <https://github.com/TWC-FINE/PachocloSystem>.
+> Las imágenes publicadas deben corresponder a la versión con **MongoDB** (leen
+> `SPRING_MONGODB_URI`). Si los tags de Docker Hub son anteriores a la migración, vuelva a
+> publicarlos con el script de abajo antes de usar `docker-compose.hub.yml`.
+> `pachoclo-frontend-react` es nueva: hay que crear su repositorio público la primera vez.
 
-### Comandos usados
+### Construir y publicar
 
-Con la sesión de Docker Hub ya abierta (Docker Desktop guarda la credencial; no se escribió ninguna
-contraseña ni token). Para abrirla en otra máquina: `docker login` y escribir las credenciales en el
-aviso interactivo.
+[`scripts/publicar-imagenes.sh`](../scripts/publicar-imagenes.sh) construye las 4 imágenes desde
+sus Dockerfiles, les pone el tag de versión y `latest`, y solo las sube si se le pasa `--push`:
 
 ```bash
-# 1. Construir con el tag de versión (DOCKERHUB_USER e IMAGE_TAG dan el nombre de cada imagen)
-DOCKERHUB_USER=twcfine IMAGE_TAG=1.0 docker compose build
+# 1. Solo construir y etiquetar (no sube nada); sirve para probarlas en local
+DOCKERHUB_USER=twcfine IMAGE_TAG=1.0 scripts/publicar-imagenes.sh
 
-# 2. Añadir el tag "latest" a la misma imagen
-for i in api medicamentos frontend; do
-  docker tag twcfine/pachoclo-$i:1.0 twcfine/pachoclo-$i:latest
-done
+# 2. Publicar: iniciar sesión con la cuenta dueña de los repositorios y subir los dos tags
+docker login
+DOCKERHUB_USER=twcfine IMAGE_TAG=1.0 scripts/publicar-imagenes.sh --push
+```
 
-# 3. Publicar los dos tags de cada imagen
-for i in api medicamentos frontend; do
-  docker push twcfine/pachoclo-$i:1.0
-  docker push twcfine/pachoclo-$i:latest
+Equivale a estos comandos, por si se prefiere hacerlo a mano:
+
+```bash
+U=twcfine T=1.0
+docker build -t $U/pachoclo-frontend:$T       ./frontend
+docker build -t $U/pachoclo-frontend-react:$T ./frontend-react
+docker build -t $U/pachoclo-api:$T            ./PachocloSystem
+docker build -t $U/pachoclo-medicamentos:$T   ./MedicamentosService
+for i in frontend frontend-react api medicamentos; do
+  docker tag  $U/pachoclo-$i:$T $U/pachoclo-$i:latest
+  docker push $U/pachoclo-$i:$T
+  docker push $U/pachoclo-$i:latest
 done
 ```
 
 Antes de publicar, compruebe que las imágenes no contienen `.env`, claves privadas ni secretos
-(solo el bundle de certificados raíz de Alpine) y que los 3 repositorios son públicos.
+(solo el bundle de certificados raíz de Alpine) y que los 4 repositorios son públicos.
 
 ### Ejecutarlo solo con Docker Hub
 
 [`docker-compose.hub.yml`](../docker-compose.hub.yml) es igual que `docker-compose.yml` salvo que
-las 3 imágenes propias se **descargan** (`image:`) en vez de construirse (`build:`). Solo hacen falta
+las 4 imágenes propias se **descargan** (`image:`) en vez de construirse (`build:`). Solo hacen falta
 ese archivo y un `.env` copiado de `.env.example`; no hace falta el código fuente. MongoDB se
 descarga igualmente de la imagen oficial.
 
 ```bash
 cp .env.example .env
 docker compose -f docker-compose.hub.yml pull
-docker compose -f docker-compose.hub.yml up -d      # luego: http://localhost:4200
+docker compose -f docker-compose.hub.yml up -d      # Angular: http://localhost:4200 · React: http://localhost:4300
 docker compose -f docker-compose.hub.yml down       # (con -v también borra los datos)
 ```
 
-En una carpeta con solo esos dos archivos y sin imágenes locales de `twcfine/*`, el `pull` descarga
-las imágenes, se inicializa `rs0` y los servicios de larga duración quedan `healthy`. El login del
-admin responde 200 y los datos sobreviven a `down` (sin `-v`).
+### Override de demo: Swagger y MongoDB en el host
+
+El compose principal no publica los backends ni la base. Para la demo,
+[`docker-compose.demo.yml`](../docker-compose.demo.yml) añade esos puertos sin tocar nada más:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+```
+
+| Qué | URL |
+|---|---|
+| Swagger PachocloSystem | <http://localhost:8080/swagger-ui.html> |
+| Swagger MedicamentosService | <http://localhost:8081/swagger-ui.html> (Authorize → `X-Api-Key` = `MEDICAMENTOS_API_KEY`) |
+| MongoDB | `mongodb://127.0.0.1:27017/?directConnection=true` (solo en 127.0.0.1) |
+
+`medicamentos-service` y `mongo` se unen además a una red `demo` normal, porque Docker no publica
+puertos de una red `internal: true`.
 
 ## Seguridad aplicada
 
 - **Contenedores sin root:** los backends corren como `app` (uid 10001) y nginx como `nginx` (uid 101).
 - **Sin secretos en las imágenes:** `.dockerignore` excluye `.env`; todo llega por variables en ejecución.
-- **Aislamiento de red:** la base y `medicamentos-service` están en una red `internal`, sin puertos al host.
+- **Aislamiento de red:** la base y `medicamentos-service` están en una red `internal`, sin puertos al host
+  (salvo con el override de demo).
 - **MongoDB sin autenticación, pero inalcanzable desde fuera:** no publica `27017` y solo está en la
   red interna. Para un despliegue real, añada usuario y contraseña a la URI (Atlas ya lo exige).
 - **Límite de intentos de login con la IP real:** `APP_LOGIN_PROXIES_CONFIABLES` es **solo la IP de nginx**

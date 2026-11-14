@@ -1,0 +1,39 @@
+# Override para la DEMO: publica en el host los puertos que el compose principal deja cerrados,
+# para poder abrir los dos Swagger y mirar MongoDB. No cambia nada más (mismas imágenes,
+# variables, redes y volúmenes). No lo use en producción.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+#
+#   Swagger PachocloSystem:      http://localhost:8080/swagger-ui.html
+#   Swagger MedicamentosService: http://localhost:8081/swagger-ui.html   (Authorize: X-Api-Key)
+#   MongoDB (Compass/mongosh):   mongodb://127.0.0.1:27017/?directConnection=true
+#
+# También vale con docker-compose.hub.yml en lugar de docker-compose.yml.
+#
+# Por qué hace falta la red "demo": medicamentos-service y mongo solo están en la red "interna",
+# que es internal: true (sin salida al host), y Docker no publica puertos de una red así. La red
+# "demo" es un bridge normal que solo sirve para publicar esos puertos.
+
+services:
+  pachoclo-api:
+    ports:
+      - "${API_DEMO_PORT:-8080}:8080"
+
+  medicamentos-service:
+    ports:
+      - "${MEDICAMENTOS_DEMO_PORT:-8081}:8081"
+    networks:
+      interna:
+      demo:
+
+  mongo:
+    ports:
+      # Solo en 127.0.0.1: la base no tiene autenticación.
+      - "127.0.0.1:${MONGO_DEMO_PORT:-27017}:27017"
+    networks:
+      interna:
+      demo:
+
+networks:
+  demo:
+    driver: bridge
