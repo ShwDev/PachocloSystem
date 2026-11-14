@@ -219,7 +219,8 @@ export class MedicamentosListaComponent {
       titulo: 'Eliminar medicamento',
       mensaje:
         `Se eliminará ${this.descripcion(medicamento)} (${medicamento.idMedicamento}, ` +
-        `lote ${medicamento.lote}) del inventario. Esta acción no se puede deshacer.`,
+        `lote ${medicamento.lote}) del inventario. Se borra definitivamente de la base de datos; ` +
+        'esta acción no se puede deshacer.',
       accion: 'Eliminar',
     })
       .pipe(

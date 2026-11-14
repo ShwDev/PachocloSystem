@@ -88,12 +88,13 @@ export class PacientesListaComponent {
 
   protected eliminar(paciente: Paciente): void {
     confirmar(this.dialogo, {
-      titulo: 'Dar de baja al paciente',
+      titulo: 'Desactivar paciente',
       mensaje:
-        `Se dará de baja a ${paciente.nombre} (${paciente.idPaciente}): dejará de aparecer en ` +
-        'la lista y en el historial, aunque su historial clínico se conserva. Esta acción no se ' +
-        'puede deshacer.',
-      accion: 'Dar de baja',
+        `Se desactivará a ${paciente.nombre} (${paciente.idPaciente}). No se borra nada: es ` +
+        'una baja lógica, así que sus datos y su historial clínico se conservan en la base de ' +
+        'datos. Dejará de aparecer en la lista, en las búsquedas y en el historial general, y no ' +
+        'se puede reactivar desde la aplicación.',
+      accion: 'Desactivar',
     })
       .pipe(
         filter(Boolean),
@@ -101,7 +102,9 @@ export class PacientesListaComponent {
       )
       .subscribe({
         next: () => {
-          this.notificaciones.exito(`Paciente ${paciente.idPaciente} dado de baja.`);
+          this.notificaciones.exito(
+            `Paciente ${paciente.idPaciente} desactivado. Su historial clínico se conserva.`,
+          );
           this.recargar();
         },
         error: (error: unknown) => {

@@ -91,7 +91,8 @@ export class TrabajadoresListaComponent {
       mensaje:
         `Se eliminará a ${trabajador.nombreCompleto} (${trabajador.idTrabajador}). Si tiene un ` +
         'usuario de acceso, también quedará desactivado y no podrá volver a iniciar sesión. ' +
-        'Esta acción no se puede deshacer.',
+        'El trabajador se borra definitivamente de la base de datos; esta acción no se puede ' +
+        'deshacer.',
       accion: 'Eliminar',
     })
       .pipe(

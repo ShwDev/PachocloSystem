@@ -88,7 +88,7 @@ describe('PacientesListaComponent', () => {
 
     expect(elemento.querySelector('.lista-encabezado button')).toBeNull();
     expect(boton('Editar a Ana Ruiz')).toBeNull();
-    expect(boton('Dar de baja a Ana Ruiz')).toBeNull();
+    expect(boton('Desactivar a Ana Ruiz')).toBeNull();
     expect(boton('Cambiar habitación de Ana Ruiz')).not.toBeNull();
     expect(elemento.querySelector('a[aria-label="Historial clínico de Ana Ruiz"]')).not.toBeNull();
   });
@@ -99,7 +99,7 @@ describe('PacientesListaComponent', () => {
 
     expect(elemento.querySelector('.lista-encabezado button')).not.toBeNull();
     expect(boton('Editar a Ana Ruiz')).not.toBeNull();
-    expect(boton('Dar de baja a Ana Ruiz')).toBeNull();
+    expect(boton('Desactivar a Ana Ruiz')).toBeNull();
   });
 
   it('indica que no hay pacientes', async () => {
@@ -142,19 +142,23 @@ describe('PacientesListaComponent', () => {
     expect(filas()).toHaveLength(2);
   });
 
-  it('da de baja tras confirmar, avisa y recarga', async () => {
+  it('desactiva (baja lógica) tras confirmar, avisa y recarga', async () => {
     servicio.eliminar.mockReturnValue(of(undefined));
     alCerrarDialogo(true);
     const { fixture, boton } = await renderizar();
 
-    boton('Dar de baja a Ana Ruiz').click();
+    boton('Desactivar a Ana Ruiz').click();
     await fixture.whenStable();
 
     const [componente, config] = dialogo.open.mock.calls[0];
     expect(componente).toBe(ConfirmacionDialogoComponent);
-    expect(config.data.mensaje).toContain('su historial clínico se conserva');
+    expect(config.data.titulo).toBe('Desactivar paciente');
+    expect(config.data.mensaje).toContain('baja lógica');
+    expect(config.data.mensaje).toContain('su historial clínico se conservan');
     expect(servicio.eliminar).toHaveBeenCalledWith('PAC-0001');
-    expect(notificaciones.exito).toHaveBeenCalledWith('Paciente PAC-0001 dado de baja.');
+    expect(notificaciones.exito).toHaveBeenCalledWith(
+      'Paciente PAC-0001 desactivado. Su historial clínico se conserva.',
+    );
     expect(servicio.listar).toHaveBeenCalledTimes(2);
   });
 
@@ -162,7 +166,7 @@ describe('PacientesListaComponent', () => {
     alCerrarDialogo(false);
     const { fixture, boton } = await renderizar();
 
-    boton('Dar de baja a Ana Ruiz').click();
+    boton('Desactivar a Ana Ruiz').click();
     await fixture.whenStable();
 
     expect(servicio.eliminar).not.toHaveBeenCalled();
@@ -175,7 +179,7 @@ describe('PacientesListaComponent', () => {
     alCerrarDialogo(true);
     const { fixture, boton } = await renderizar();
 
-    boton('Dar de baja a Ana Ruiz').click();
+    boton('Desactivar a Ana Ruiz').click();
     await fixture.whenStable();
 
     expect(notificaciones.error).toHaveBeenCalledWith(['No se encontró el paciente PAC-0001.']);
