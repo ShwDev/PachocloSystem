@@ -6,7 +6,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Contraseña nueva asignada por un administrador.")
 public record PasswordRequest(
         @Schema(description = "Contraseña nueva: al menos 10 caracteres, hasta 72 bytes en UTF-8 y "
-                + "distinta del username.", accessMode = Schema.AccessMode.WRITE_ONLY)
+                + "distinta del username.", example = "restablecida-2026",
+                accessMode = Schema.AccessMode.WRITE_ONLY)
         String password) {
 
     /** La contraseña nunca aparece en {@code toString()} (logs, errores). */

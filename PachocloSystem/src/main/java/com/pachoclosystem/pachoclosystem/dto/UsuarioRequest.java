@@ -17,7 +17,8 @@ public record UsuarioRequest(
         String username,
 
         @Schema(description = "Contraseña: al menos 10 caracteres, hasta 72 bytes en UTF-8 y "
-                + "distinta del username.", accessMode = Schema.AccessMode.WRITE_ONLY)
+                + "distinta del username.", example = "temporal-ana-2026",
+                accessMode = Schema.AccessMode.WRITE_ONLY)
         String password,
 
         @Schema(description = "Rol del usuario.", example = "DOCTOR",

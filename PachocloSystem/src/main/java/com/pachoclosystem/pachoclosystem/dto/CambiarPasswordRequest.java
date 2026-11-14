@@ -10,11 +10,13 @@ import jakarta.validation.constraints.NotBlank;
  */
 @Schema(description = "Cambio de la contraseña del usuario autenticado.")
 public record CambiarPasswordRequest(
-        @Schema(description = "Contraseña actual.", accessMode = Schema.AccessMode.WRITE_ONLY)
+        @Schema(description = "Contraseña actual.", example = "temporal-ana-2026",
+                accessMode = Schema.AccessMode.WRITE_ONLY)
         @NotBlank(message = "La contraseña actual es obligatoria.") String passwordActual,
 
         @Schema(description = "Contraseña nueva: al menos 10 caracteres, hasta 72 bytes en UTF-8 y "
-                + "distinta del username.", accessMode = Schema.AccessMode.WRITE_ONLY)
+                + "distinta del username.", example = "nueva-clave-ana-2026",
+                accessMode = Schema.AccessMode.WRITE_ONLY)
         @NotBlank(message = "La nueva contraseña es obligatoria.") String passwordNueva) {
 
     /** Las contraseñas nunca aparecen en {@code toString()} (logs, errores). */
