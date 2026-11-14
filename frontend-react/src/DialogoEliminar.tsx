@@ -31,8 +31,8 @@ export function DialogoEliminar({ cliente, medicamento, onCerrar, onHecho }: Pro
     <Modal titulo="Eliminar medicamento" onCerrar={onCerrar} bloqueado={enviando}>
       <p className="modal-descripcion">
         Se eliminará <strong>{`${medicamento.nombre} ${medicamento.concentracion}`}</strong> (
-        {medicamento.idMedicamento}, lote {medicamento.lote}) del inventario. Esta acción no se
-        puede deshacer.
+        {medicamento.idMedicamento}, lote {medicamento.lote}) del inventario. Se borra
+        definitivamente de la base de datos; esta acción no se puede deshacer.
       </p>
 
       {error && (
