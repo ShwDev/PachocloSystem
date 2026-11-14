@@ -29,7 +29,7 @@ se configuran en cada plataforma y nunca se guardan en el repositorio.
 - **Una instancia, dos bases:** `pachoclosystem` y `medicamentos`, cada una apuntada por su servicio
   con `SPRING_MONGODB_URI`.
 - **Índices al arrancar.** No hay migraciones manuales (Flyway era de PostgreSQL): MongoDB crea los
-  índices declarados (`@Indexed` y los de `MongoConfig`) al arrancar cada servicio. Si la base no
+  índices declarados con `@Indexed` al arrancar cada servicio. Si la base no
   responde, el arranque falla en vez de quedarse a medias.
 - **Sin autenticación no salga de la red privada.** En producción use un usuario y contraseña de
   base de datos en la URI; con `SPRING_PROFILES_ACTIVE=prod`, el servicio se niega a arrancar si
