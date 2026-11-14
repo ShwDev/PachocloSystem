@@ -6,7 +6,7 @@
 #
 #   Swagger PachocloSystem:      http://localhost:8080/swagger-ui.html
 #   Swagger MedicamentosService: http://localhost:8081/swagger-ui.html   (Authorize: X-Api-Key)
-#   MongoDB (Compass/mongosh):   mongodb://127.0.0.1:27017/?directConnection=true
+#   MongoDB (Compass/mongosh):   mongodb://127.0.0.1:27018/?directConnection=true
 #
 # También vale con docker-compose.hub.yml en lugar de docker-compose.yml.
 #
@@ -28,8 +28,9 @@ services:
 
   mongo:
     ports:
-      # Solo en 127.0.0.1: la base no tiene autenticación.
-      - "127.0.0.1:${MONGO_DEMO_PORT:-27017}:27017"
+      # Solo en 127.0.0.1 (la base no tiene autenticación) y en el 27018, para no chocar con un
+      # MongoDB instalado en el equipo, que suele ocupar el 27017.
+      - "127.0.0.1:${MONGO_DEMO_PORT:-27018}:27017"
     networks:
       interna:
       demo:

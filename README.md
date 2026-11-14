@@ -65,7 +65,7 @@ backends y la base en el host para poder abrir los dos Swagger. Sin él (`docker
 | Frontend React (Medicamentos) | <http://localhost:4300> |
 | Swagger PachocloSystem | <http://localhost:8080/swagger-ui.html> (solo con el override de demo) |
 | Swagger MedicamentosService | <http://localhost:8081/swagger-ui.html> (solo con el override de demo) |
-| MongoDB | `docker compose exec mongo mongosh`, o `mongodb://127.0.0.1:27017/?directConnection=true` con el override |
+| MongoDB | `docker compose exec mongo mongosh`, o `mongodb://127.0.0.1:27018/?directConnection=true` con el override |
 
 Para pararlo: `docker compose -f docker-compose.yml -f docker-compose.demo.yml down`. **Sin
 `-v`** los datos se conservan; con `-v` se borra el volumen de MongoDB. Detalle de servicios,

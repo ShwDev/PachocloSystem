@@ -302,7 +302,7 @@ docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
 |---|---|
 | Swagger PachocloSystem | <http://localhost:8080/swagger-ui.html> |
 | Swagger MedicamentosService | <http://localhost:8081/swagger-ui.html> (Authorize → `X-Api-Key` = `MEDICAMENTOS_API_KEY`) |
-| MongoDB | `mongodb://127.0.0.1:27017/?directConnection=true` (solo en 127.0.0.1) |
+| MongoDB | `mongodb://127.0.0.1:27018/?directConnection=true` (solo en 127.0.0.1) |
 
 `medicamentos-service` y `mongo` se unen además a una red `demo` normal, porque Docker no publica
 puertos de una red `internal: true`.
@@ -313,10 +313,11 @@ puertos de una red `internal: true`.
 - **Sin secretos en las imágenes:** `.dockerignore` excluye `.env`; todo llega por variables en ejecución.
 - **Aislamiento de red:** la base y `medicamentos-service` están en una red `internal`, sin puertos al host
   (salvo con el override de demo).
-- **MongoDB sin autenticación, pero inalcanzable desde fuera:** no publica `27017` y solo está en la
+- **MongoDB sin autenticación, pero inalcanzable desde fuera:** no publica `27017` (el override de demo
+  lo abre solo en `127.0.0.1:27018`) y solo está en la
   red interna. Para un despliegue real, añada usuario y contraseña a la URI (Atlas ya lo exige).
-- **Límite de intentos de login con la IP real:** `APP_LOGIN_PROXIES_CONFIABLES` es **solo la IP de nginx**
-  (`172.28.10.10`), no toda la subred. Si fuera `172.28.10.0/24`, la puerta de enlace
+- **Límite de intentos de login con la IP real:** `APP_LOGIN_PROXIES_CONFIABLES` es **solo las IP de los dos nginx**
+  (`172.28.10.10` y `172.28.10.11`), no toda la subred. Si fuera `172.28.10.0/24`, la puerta de enlace
   (`172.28.10.1`, que es la IP con la que nginx ve al cliente) quedaría como "proxy" y un cliente
   podría falsificar `X-Forwarded-For` para esquivar el bloqueo.
 - **Cabeceras en nginx:** `X-Content-Type-Options`, `X-Frame-Options` y `Referrer-Policy`.
