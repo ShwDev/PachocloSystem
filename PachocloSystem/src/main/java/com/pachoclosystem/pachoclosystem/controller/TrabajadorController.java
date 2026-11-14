@@ -137,7 +137,8 @@ public class TrabajadorController {
 
     @Operation(summary = "Dar de baja un trabajador",
             description = """
-                    Solo ADMIN. Borra al trabajador y, en la misma transacción, **desactiva su
+                    Solo ADMIN. **Borrado físico:** elimina el documento del trabajador de MongoDB
+                    (colección `trabajadores`) y, en la misma transacción, **desactiva su
                     usuario vinculado** e invalida sus tokens de inmediato. El historial que firmó
                     se conserva.
                     """)

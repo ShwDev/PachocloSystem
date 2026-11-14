@@ -146,13 +146,25 @@ public class PacienteController {
         return PacienteResponse.from(servicio.editarHabitacion(id, request.habitacion()));
     }
 
-    @Operation(summary = "Dar de baja un paciente",
+    @Operation(summary = "Desactivar un paciente (baja lógica)",
             description = """
-                    Solo ADMIN. Es una **baja lógica**: el paciente deja de aparecer en los listados,
-                    pero su historial clínico se conserva y sigue siendo consultable.
+                    Solo ADMIN. **No borra el documento**: es una **baja lógica** que marca al
+                    paciente con `activo=false` en MongoDB (colección `pacientes`).
+
+                    Después de la baja:
+                    - El paciente deja de salir en `GET /api/pacientes` (también al buscar con `q`)
+                      y `GET /api/pacientes/{id}` responde 404, igual que editarlo, cambiarle la
+                      habitación, consultar su historial o añadirle registros.
+                    - Sus registros clínicos **se conservan** en `registros_clinicos` y no se borran
+                      ni en cascada; el historial general (`GET /api/historial`) solo los excluye.
+                    - No hay reactivación por la API, y repetir el DELETE responde 404.
+
+                    Motivo: en un entorno hospitalario no se elimina información clínica; solo se
+                    inactiva al paciente.
                     """)
     @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Paciente dado de baja, sin cuerpo."),
+            @ApiResponse(responseCode = "204",
+                    description = "Paciente desactivado (`activo=false`); el documento y su historial se conservan. Sin cuerpo."),
             @ApiResponse(responseCode = "401", description = "Falta el token o no es válido.",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "403", description = "El rol no puede dar de baja pacientes.",

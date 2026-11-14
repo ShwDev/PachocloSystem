@@ -151,7 +151,8 @@ public class MedicamentoController {
     }
 
     @Operation(summary = "Eliminar un medicamento",
-            description = "Solo ADMIN. Borra el medicamento del inventario; no se puede deshacer.")
+            description = "Solo ADMIN. Se reenvía a MedicamentosService, que hace un **borrado físico** "
+                    + "(elimina el documento de MongoDB); no se puede deshacer.")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Medicamento eliminado, sin cuerpo."),
             @ApiResponse(responseCode = "401", description = "Falta el token o no es válido.",

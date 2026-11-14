@@ -2,6 +2,7 @@ package com.pachoclosystem.pachoclosystem.controller;
 
 import org.junit.jupiter.api.Test;
 
+import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -55,6 +56,59 @@ class DocumentacionApiTest extends MockMvcBaseTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/pacientes/{id}/historial'].post.parameters[?(@.name == 'Idempotency-Key')]")
                         .exists());
+    }
+
+    @Test
+    void elDeleteDePacientesSeDocumentaComoBajaLogica() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/pacientes/{id}'].delete.summary",
+                        containsString("baja lógica")))
+                .andExpect(jsonPath("$.paths['/api/pacientes/{id}'].delete.description",
+                        allOf(containsString("activo=false"), containsString("No borra el documento"),
+                                containsString("se conservan"))))
+                .andExpect(jsonPath("$.paths['/api/pacientes/{id}'].delete.responses['204'].description",
+                        containsString("activo=false")))
+                // Trabajadores y medicamentos sí borran el documento, y así lo dicen.
+                .andExpect(jsonPath("$.paths['/api/trabajadores/{id}'].delete.description",
+                        containsString("Borrado físico")))
+                .andExpect(jsonPath("$.paths['/api/medicamentos/{id}'].delete.description",
+                        containsString("borrado físico")));
+    }
+
+    @Test
+    void historialSinPutNiDeleteYUsuariosSinDeleteSonIntencionales() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/pacientes/{id}/historial'].put").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/pacientes/{id}/historial'].delete").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/historial'].put").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/historial'].delete").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/usuarios/{id}'].delete").doesNotExist())
+                .andExpect(jsonPath("$.tags[?(@.name == 'Historial clínico')].description",
+                        hasItem(containsString("Sin PUT ni DELETE a propósito"))))
+                .andExpect(jsonPath("$.tags[?(@.name == 'Usuarios')].description",
+                        hasItem(containsString("Sin DELETE a propósito"))));
+    }
+
+    @Test
+    void lasOperacionesDeEscrituraDocumentanCuerpoYCodigos() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/pacientes'].post.requestBody.content['application/json'].schema['$ref']",
+                        containsString("PacienteRequest")))
+                .andExpect(jsonPath("$.paths['/api/pacientes/{id}'].put.requestBody").exists())
+                .andExpect(jsonPath("$.paths['/api/pacientes/{id}/habitacion'].patch.requestBody").exists())
+                .andExpect(jsonPath("$.paths['/api/trabajadores'].post.requestBody").exists())
+                .andExpect(jsonPath("$.paths['/api/trabajadores/{id}'].put.requestBody").exists())
+                .andExpect(jsonPath("$.paths['/api/medicamentos'].post.requestBody").exists())
+                .andExpect(jsonPath("$.paths['/api/medicamentos/{id}'].put.requestBody").exists())
+                .andExpect(jsonPath("$.paths['/api/pacientes'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/api/trabajadores'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/api/medicamentos'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/api/pacientes/{id}'].delete.responses['204']").exists())
+                .andExpect(jsonPath("$.paths['/api/trabajadores/{id}'].delete.responses['204']").exists())
+                .andExpect(jsonPath("$.paths['/api/medicamentos/{id}'].delete.responses['204']").exists());
     }
 
     @Test

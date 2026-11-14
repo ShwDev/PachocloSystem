@@ -32,7 +32,11 @@ import java.util.List;
 @RestController
 @Tag(name = "Historial clínico", description = """
         Registros firmados por el trabajador del usuario autenticado. El historial global
-        excluye a los pacientes dados de baja.
+        excluye a los pacientes dados de baja, pero sus registros se conservan.
+
+        **Sin PUT ni DELETE, a propósito:** un registro clínico es inmutable una vez creado,
+        como en una historia clínica real. Una corrección se hace añadiendo un registro nuevo
+        (por ejemplo de tipo `EVOLUCION`), nunca editando o borrando el anterior.
         """)
 public class HistorialClinicoController {
 

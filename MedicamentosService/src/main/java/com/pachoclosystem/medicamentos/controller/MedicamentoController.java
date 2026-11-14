@@ -143,7 +143,8 @@ public class MedicamentoController {
     }
 
     @Operation(summary = "Eliminar un medicamento",
-            description = "Borra el medicamento del inventario. La operación no se puede deshacer.")
+            description = "**Borrado físico:** elimina el documento de MongoDB (colección `medicamentos`). "
+                    + "La operación no se puede deshacer; después, `GET /{id}` responde 404.")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Medicamento eliminado, sin cuerpo."),
             @ApiResponse(responseCode = "401", description = "Falta `X-Api-Key` o no es válida.",

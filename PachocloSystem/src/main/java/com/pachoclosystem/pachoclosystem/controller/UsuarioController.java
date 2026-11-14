@@ -42,6 +42,10 @@ import java.util.Map;
 @Tag(name = "Usuarios", description = """
         Usuarios de acceso, solo para ADMIN. Las respuestas nunca incluyen contraseñas ni el
         hash. El alta y el restablecimiento dejan al usuario con el cambio obligatorio.
+
+        **Sin DELETE, a propósito:** un usuario no se borra, solo se desactiva
+        (`PATCH /{id}/desactivar`) y se puede volver a activar. Así se conserva la autoría
+        de los registros clínicos que firmó y se impide reutilizar su vínculo con el trabajador.
         """)
 public class UsuarioController {
 

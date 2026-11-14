@@ -91,13 +91,16 @@ public class OpenApiConfig {
                         new Tag().name("Autenticación")
                                 .description("Login, usuario actual y cambio de contraseña propia."),
                         new Tag().name("Pacientes")
-                                .description("Alta, consulta, edición, cambio de habitación y baja lógica."),
+                                .description("Alta, consulta, edición, cambio de habitación y baja lógica "
+                                        + "(el DELETE marca `activo=false` y conserva el historial)."),
                         new Tag().name("Trabajadores")
-                                .description("Doctores y enfermeros del hospital."),
+                                .description("Doctores y enfermeros del hospital. El DELETE borra el documento."),
                         new Tag().name("Usuarios")
-                                .description("Usuarios de acceso, solo para ADMIN. Nunca exponen contraseñas."),
+                                .description("Usuarios de acceso, solo para ADMIN. Nunca exponen contraseñas. "
+                                        + "Sin DELETE a propósito: solo se desactivan."),
                         new Tag().name("Historial clínico")
-                                .description("Registros firmados por el trabajador del usuario autenticado."),
+                                .description("Registros firmados por el trabajador del usuario autenticado. "
+                                        + "Sin PUT ni DELETE a propósito: los registros clínicos son inmutables."),
                         new Tag().name("Medicamentos")
                                 .description("Inventario a través de MedicamentosService, con el token del usuario.")));
     }
