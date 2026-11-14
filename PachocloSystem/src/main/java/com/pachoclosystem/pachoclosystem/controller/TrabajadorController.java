@@ -135,7 +135,7 @@ public class TrabajadorController {
                 id, request.nombre(), request.rol(), request.especialidad(), request.nivelExperiencia()));
     }
 
-    @Operation(summary = "Dar de baja un trabajador",
+    @Operation(summary = "Eliminar un trabajador (borrado físico)",
             description = """
                     Solo ADMIN. **Borrado físico:** elimina el documento del trabajador de MongoDB
                     (colección `trabajadores`) y, en la misma transacción, **desactiva su

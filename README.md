@@ -19,7 +19,10 @@ URL: [PachocloSystem](https://pachoclo-system-frontend-liard.vercel.app/) · Med
                (localhost:4200)      ┌──► (localhost:8080)              (localhost:8081)
                                      │     JWT, roles, pacientes,        inventario y stock
  Navegador ──► Frontend React ──/api─┘     trabajadores, historial       de medicamentos
-               (localhost:5173)
+               (localhost:5173)                   │                            │
+                                                  ▼                            ▼
+                                      MongoDB: base pachoclosystem   MongoDB: base medicamentos
+                                      (una instancia mongo:8, replica set rs0, volumen mongo-datos)
 ```
 
 | Parte | Carpeta | Puerto | Qué hace |
@@ -28,6 +31,7 @@ URL: [PachocloSystem](https://pachoclo-system-frontend-liard.vercel.app/) · Med
 | Frontend React | [`frontend-react/`](frontend-react/) | 5173 (Docker: 4300) | Aplicación independiente en React solo para el inventario de Medicamentos, con su propio login. Solo habla con PachocloSystem. |
 | PachocloSystem | [`PachocloSystem/`](PachocloSystem/) | 8080 | API principal (Spring Boot): autenticación JWT, permisos por rol, pacientes, trabajadores, usuarios, historial clínico. Es la única puerta de entrada a los medicamentos. |
 | MedicamentosService | [`MedicamentosService/`](MedicamentosService/) | 8081 | Microservicio de inventario (Spring Boot): stock, entradas y salidas, vencimientos. |
+| MongoDB | (imagen `mongo:8`) | 27017 | Una base por servicio (`pachoclosystem` y `medicamentos`). Ningún servicio lee la base del otro. |
 
 Cómo se comunican:
 
@@ -40,7 +44,48 @@ Cómo se comunican:
 - **El frontend nunca llama a MedicamentosService.** Si este está caído, PachocloSystem responde
   503 y solo el módulo de medicamentos muestra el aviso.
 
-## Requisitos
+## Inicio rápido con Docker
+
+Es la forma más corta de levantar todo (2 frontends, 2 backends y MongoDB). Solo hace falta Docker
+Desktop (o Docker Engine) con Compose v2; no hacen falta Java ni Node.
+
+```bash
+cp .env.example .env              # valores de demo; cámbielos fuera de un entorno de pruebas
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+docker compose ps                 # esperar a que todo esté "healthy" (1-2 minutos)
+```
+
+[`docker-compose.demo.yml`](docker-compose.demo.yml) es un override para la demo: publica además los
+backends y la base en el host para poder abrir los dos Swagger. Sin él (`docker compose up -d
+--build`) solo se publican los frontends, que es la configuración normal.
+
+| Qué | URL |
+|---|---|
+| Frontend Angular (todos los módulos) | <http://localhost:4200> |
+| Frontend React (Medicamentos) | <http://localhost:4300> |
+| Swagger PachocloSystem | <http://localhost:8080/swagger-ui.html> (solo con el override de demo) |
+| Swagger MedicamentosService | <http://localhost:8081/swagger-ui.html> (solo con el override de demo) |
+| MongoDB | `docker compose exec mongo mongosh`, o `mongodb://127.0.0.1:27017/?directConnection=true` con el override |
+
+Para pararlo: `docker compose -f docker-compose.yml -f docker-compose.demo.yml down`. **Sin
+`-v`** los datos se conservan; con `-v` se borra el volumen de MongoDB. Detalle de servicios,
+redes, volúmenes y publicación en Docker Hub en [`docker/README.md`](docker/README.md).
+
+### Credenciales de demo
+
+Son los valores de [`.env.example`](.env.example). **Solo para desarrollo y demos**; en producción
+cada secreto es distinto y no está en el repositorio.
+
+| Qué | Valor |
+|---|---|
+| Usuario administrador | `admin` |
+| Contraseña del administrador | `admin-ejemplo-2026` |
+| Clave entre servicios (`X-Api-Key`, Authorize del Swagger de MedicamentosService) | `clave-servicio-ejemplo-solo-desarrollo-0123456789` |
+
+El administrador se crea en el primer arranque, con la contraseña que tenga `ADMIN_PASSWORD` en ese
+momento. Si la base ya tenía el usuario, cambiar la variable no cambia su contraseña.
+
+## Requisitos (desarrollo sin Docker)
 
 - **Java 25** (`JAVA_HOME` apuntando a un JDK 25). No hace falta instalar Maven: cada servicio
   incluye su wrapper (`mvnw`).
@@ -58,10 +103,10 @@ docker exec pachoclo-mongo mongosh --quiet --eval \
   'rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]})'
 ```
 
-También puede levantar todo el sistema con `docker compose up -d` (ver
-[`docker/README.md`](docker/README.md)); entonces no hacen falta Java ni Node.
+También puede levantar todo el sistema con Docker (ver [Inicio rápido con Docker](#inicio-rápido-con-docker));
+entonces no hacen falta Java ni Node.
 
-## Cómo levantar el sistema
+## Cómo levantar el sistema sin Docker
 
 Hacen falta **tres terminales**, en este orden. Los valores de abajo son **solo de ejemplo para
 desarrollo**: use los suyos y no los guarde en el repositorio.
@@ -166,6 +211,92 @@ pantalla **Usuarios**.
 9. Opcional: detenga MedicamentosService y recargue Medicamentos para ver el aviso 503 sin que
    caiga el resto de la app.
 
+## Endpoints por recurso
+
+Todas las rutas son de PachocloSystem (`:8080`), la única puerta de entrada. Todas exigen
+`Authorization: Bearer <token>` salvo el login. Roles: **A** = ADMIN, **D** = DOCTOR,
+**E** = ENFERMERO. El contrato completo (parámetros, cuerpos, ejemplos y respuestas) está en Swagger.
+
+| Recurso | Método y ruta | Qué hace | Roles |
+|---|---|---|---|
+| Autenticación | `POST /api/auth/login` | Inicia sesión y devuelve el token JWT | público |
+| | `GET /api/auth/me` | Usuario autenticado | todos |
+| | `POST /api/auth/password` | Cambia la contraseña propia | todos |
+| Pacientes | `GET /api/pacientes?q=` | Lista los pacientes activos (filtro opcional) | A D E |
+| | `GET /api/pacientes/{id}` | Obtiene un paciente activo | A D E |
+| | `POST /api/pacientes` | Registra un paciente (201 + `Location`) | A D |
+| | `PUT /api/pacientes/{id}` | Edita nombre, edad y habitación | A D |
+| | `PATCH /api/pacientes/{id}/habitacion` | Cambia solo la habitación | A D E |
+| | `DELETE /api/pacientes/{id}` | **Baja lógica** (`activo=false`), 204 | A |
+| Historial clínico | `GET /api/pacientes/{id}/historial?q=` | Registros de un paciente activo | A D E |
+| | `POST /api/pacientes/{id}/historial` | Añade un registro firmado (acepta `Idempotency-Key`) | D E* |
+| | `GET /api/historial?filtro=&q=` | Historial de todos los pacientes activos | A D E |
+| Trabajadores | `GET /api/trabajadores?q=` | Lista doctores y enfermeros | A D |
+| | `GET /api/trabajadores/{id}` | Obtiene un trabajador | A D |
+| | `POST /api/trabajadores` | Registra un doctor o enfermero (201) | A |
+| | `PUT /api/trabajadores/{id}` | Edita un trabajador | A |
+| | `DELETE /api/trabajadores/{id}` | **Borrado físico** y desactivación de su usuario, 204 | A |
+| Usuarios | `GET /api/usuarios` · `GET /api/usuarios/{id}` | Lista y consulta usuarios (sin contraseñas) | A |
+| | `POST /api/usuarios` | Crea un usuario con contraseña temporal (201) | A |
+| | `PATCH /api/usuarios/{id}/rol` | Cambia el rol | A |
+| | `PATCH /api/usuarios/{id}/desactivar` · `/activar` | Desactiva o reactiva (no hay DELETE) | A |
+| | `PATCH /api/usuarios/{id}/password` | Restablece la contraseña | A |
+| Medicamentos | `GET /api/medicamentos?q=` · `GET /api/medicamentos/{id}` | Lista y consulta el inventario | A D E |
+| | `POST /api/medicamentos` | Registra un medicamento (201) | A |
+| | `PUT /api/medicamentos/{id}` | Edita sus datos (el stock cambia con entradas y salidas) | A |
+| | `DELETE /api/medicamentos/{id}` | **Borrado físico**, 204 | A |
+| | `POST /api/medicamentos/{id}/entradas` | Suma stock | A |
+| | `POST /api/medicamentos/{id}/salidas` | Resta stock | A E |
+| | `GET /api/medicamentos/stock-bajo` · `/por-vencer?dias=` · `/vencidos` | Alertas de inventario | A D E |
+
+\* El registro clínico lo firma el trabajador vinculado al usuario, así que el ADMIN (sin
+trabajador) puede consultar el historial pero no añadir registros.
+
+Las rutas `/api/medicamentos/**` se reenvían a MedicamentosService (`:8081`), que expone las mismas
+rutas protegidas con `X-Api-Key` en lugar del token. El navegador nunca lo llama directamente.
+
+## Decisiones de borrado
+
+| Recurso | DELETE | Qué queda en MongoDB |
+|---|---|---|
+| Medicamentos | Borrado físico | Nada: el documento se elimina de `medicamentos.medicamentos`. |
+| Trabajadores | Borrado físico | Nada del trabajador. Su usuario, si tenía, queda **desactivado**, y los registros que firmó conservan una copia del autor. |
+| Pacientes | **Baja lógica** | El documento sigue en `pachoclosystem.pacientes` con `activo=false`, y sus registros clínicos siguen intactos. |
+| Usuarios | No hay DELETE | Se desactivan y se reactivan con `PATCH`. |
+| Historial clínico | No hay PUT ni DELETE | Los registros son inmutables; una corrección es un registro nuevo. |
+
+**Por qué la baja de pacientes es lógica.** En un entorno hospitalario no se elimina información
+clínica: la historia de un paciente tiene que seguir disponible para auditorías, consultas
+posteriores y responsabilidad legal. Por eso el `DELETE /api/pacientes/{id}` no borra nada, ni
+en cascada: solo inactiva al paciente (`activo=false`). Desde ese momento no aparece en las
+listas, las búsquedas ni el historial general, y las rutas con su ID responden 404. Sus datos y
+sus registros siguen en la base. En la interfaz la acción se llama **Desactivar paciente** y el
+diálogo de confirmación lo explica. Medicamentos y trabajadores no son información clínica, así
+que se borran de verdad.
+
+## Persistencia en MongoDB
+
+- Cada servicio se conecta con su propia URI, `SPRING_MONGODB_URI`. En Compose sale de
+  `PACHOCLO_MONGO_URI` y `MEDICAMENTOS_MONGO_URI` del `.env`. No hay URIs fijas en el código.
+- Los datos viven en el volumen nombrado `mongo-datos`, montado en `/data/db` del contenedor
+  `mongo`. Se usa el mismo volumen en `docker-compose.yml` y en `docker-compose.hub.yml`.
+- Los índices (únicos de `username`, `idTrabajador` y `claveUnica` del medicamento, y los de
+  consulta) se crean al arrancar con `@Indexed` (`spring.data.mongodb.auto-index-creation=true`).
+  No hay migraciones.
+
+Cómo comprobar que los datos sobreviven a un reinicio:
+
+1. Con el stack levantado, entre en <http://localhost:4200> como `admin` y registre un medicamento
+   (o un trabajador).
+2. Compruebe que está en la base:
+   `docker compose exec mongo mongosh --quiet medicamentos --eval 'db.medicamentos.find({}, {"datos.nombre": 1})'`
+3. Pare y borre los contenedores **sin** `-v`: `docker compose down` (con el override de demo,
+   añada los mismos `-f`). Compruebe que el volumen sigue: `docker volume ls | grep mongo-datos`.
+4. Vuelva a levantarlo: `docker compose up -d` y espere a que esté `healthy`.
+5. Recargue Medicamentos: el registro sigue ahí, y el `mongosh` del paso 2 lo devuelve igual.
+
+El smoke test (ver [Tests](#tests)) hace este mismo recorrido automáticamente.
+
 ## Tests
 
 Cada parte se prueba por separado, desde su carpeta:
@@ -182,6 +313,19 @@ El frontend también tiene `npm run lint` y `npm run format:check`. No hace falt
 los servicios, pero los tests de los dos backends necesitan **Docker** (Testcontainers arranca su
 propio MongoDB).
 
+### Smoke test de extremo a extremo
+
+[`scripts/smoke-test.mjs`](scripts/smoke-test.mjs) (Node 22 o más) prueba el stack de Docker real.
+Sobre Medicamentos y Trabajadores recorre POST → GET → PUT → GET → reinicio de contenedores
+(`down` sin `-v` + `up`) → GET → DELETE → GET (404), y cuenta los documentos directamente en
+MongoDB con `mongosh` en cada paso. Sobre Pacientes comprueba la baja lógica: el paciente deja de
+salir en la API y su documento sigue con `activo=false`. Solo se ejecuta contra `localhost`.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+node scripts/smoke-test.mjs        # usa .env (o .env.example si no hay .env)
+```
+
 ## Documentación por módulo
 
 - [`PachocloSystem/README.md`](PachocloSystem/README.md): endpoints, permisos por rol, JWT, usuarios, historial idempotente e integración con medicamentos.
@@ -190,6 +334,8 @@ propio MongoDB).
 - [`frontend-react/README.md`](frontend-react/README.md): app React de Medicamentos (login, desarrollo, Docker y despliegue).
 - [`docs/plan-frontend.md`](docs/plan-frontend.md): plan y decisiones del frontend.
 - [`docs/despliegue.md`](docs/despliegue.md): despliegue en Railway y Vercel.
+- [`docs/plan-migracion-mongodb.md`](docs/plan-migracion-mongodb.md): registro de la migración de PostgreSQL a MongoDB.
+- [`docker/README.md`](docker/README.md): Docker Compose, override de demo y publicación en Docker Hub.
 
 ## Documentación de la API (OpenAPI/Swagger)
 
@@ -199,8 +345,14 @@ despliegue):
 
 | Servicio | Swagger UI | OpenAPI JSON |
 |---|---|---|
-| PachocloSystem | `http://localhost:8080/swagger-ui.html` | `http://localhost:8080/v3/api-docs` |
-| MedicamentosService | `http://localhost:8081/swagger-ui.html` | `http://localhost:8081/v3/api-docs` |
+| PachocloSystem | <http://localhost:8080/swagger-ui.html> | <http://localhost:8080/v3/api-docs> |
+| MedicamentosService | <http://localhost:8081/swagger-ui.html> | <http://localhost:8081/v3/api-docs> |
+| PachocloSystem (producción) | <https://pachoclosystem-production-2dd64b51.up.railway.app/swagger-ui.html> | `…/v3/api-docs` |
+
+En local sin Docker valen tal cual. Con Docker hace falta el override de demo
+(`-f docker-compose.demo.yml`), porque el compose normal no publica los backends. En producción
+MedicamentosService solo está en la red privada de Railway, así que su Swagger no es accesible;
+sus rutas aparecen documentadas a través de PachocloSystem.
 
 - **PachocloSystem:** el botón **Authorize** pide el token JWT que devuelve `POST /api/auth/login`;
   el resto de operaciones lo envían como `Authorization: Bearer <token>`.
@@ -239,7 +391,8 @@ de cada punto están allí.
 **Usuarios, trabajadores y pacientes**
 
 - La **baja de un paciente es lógica**: deja de aparecer en listas e historial, pero sus datos se
-  conservan en la base de datos y no se puede reactivar desde la API.
+  conservan en la base de datos y no se puede reactivar desde la API (ver
+  [Decisiones de borrado](#decisiones-de-borrado)).
 - Un trabajador solo puede tener **un usuario, aunque esté desactivado**: si su usuario se
   desactivó, no se le puede crear otro.
 - Un doctor o enfermero desactivado solo se reactiva si su trabajador sigue existiendo, es de su
