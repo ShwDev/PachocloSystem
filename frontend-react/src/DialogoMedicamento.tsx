@@ -171,7 +171,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
         )}
 
         <div className="fila-campos">
-          <Campo etiqueta="Nombre comercial" error={errores.nombre}>
+          <Campo
+            etiqueta="Nombre comercial"
+            ayuda="Obligatorio · entre 1 y 80 caracteres."
+            error={errores.nombre}
+          >
             <input
               maxLength={80}
               value={campos.nombre}
@@ -179,7 +183,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
               disabled={enviando}
             />
           </Campo>
-          <Campo etiqueta="Principio activo" error={errores.principioActivo}>
+          <Campo
+            etiqueta="Principio activo"
+            ayuda="Obligatorio · entre 1 y 80 caracteres."
+            error={errores.principioActivo}
+          >
             <input
               maxLength={80}
               value={campos.principioActivo}
@@ -190,7 +198,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
         </div>
 
         <div className="fila-campos">
-          <Campo etiqueta="Presentación" error={errores.presentacion}>
+          <Campo
+            etiqueta="Presentación"
+            ayuda="Obligatoria · seleccione una forma farmacéutica de la lista."
+            error={errores.presentacion}
+          >
             <select
               value={campos.presentacion}
               onChange={(e) => cambiar('presentacion', e.target.value as Presentacion)}
@@ -206,7 +218,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
               ))}
             </select>
           </Campo>
-          <Campo etiqueta="Concentración" error={errores.concentracion}>
+          <Campo
+            etiqueta="Concentración"
+            ayuda="Obligatoria · máximo 40 caracteres, con unidad (p. ej. 500 mg, 5 ml, 10 %)."
+            error={errores.concentracion}
+          >
             <input
               maxLength={40}
               placeholder="p. ej. 500 mg"
@@ -218,7 +234,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
         </div>
 
         <div className="fila-campos">
-          <Campo etiqueta="Laboratorio" error={errores.laboratorio}>
+          <Campo
+            etiqueta="Laboratorio"
+            ayuda="Obligatorio · entre 1 y 80 caracteres."
+            error={errores.laboratorio}
+          >
             <input
               maxLength={80}
               value={campos.laboratorio}
@@ -226,7 +246,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
               disabled={enviando}
             />
           </Campo>
-          <Campo etiqueta="Lote" error={errores.lote}>
+          <Campo
+            etiqueta="Lote"
+            ayuda="Obligatorio · entre 1 y 40 caracteres (p. ej. L-2026-01)."
+            error={errores.lote}
+          >
             <input
               maxLength={40}
               value={campos.lote}
@@ -238,12 +262,15 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
 
         <div className="fila-campos">
           {medicamento ? (
-            <Campo etiqueta="Stock actual">
+            <Campo etiqueta="Stock actual" ayuda="Solo cambia con entradas y salidas.">
               <input value={medicamento.cantidadStock} disabled readOnly />
-              <span className="ayuda">Solo cambia con entradas y salidas.</span>
             </Campo>
           ) : (
-            <Campo etiqueta="Stock inicial" error={errores.cantidadStock}>
+            <Campo
+              etiqueta="Stock inicial"
+              ayuda="Número entero entre 0 y 1.000.000 unidades."
+              error={errores.cantidadStock}
+            >
               <input
                 type="number"
                 min="0"
@@ -255,7 +282,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
               />
             </Campo>
           )}
-          <Campo etiqueta="Stock mínimo" error={errores.stockMinimo}>
+          <Campo
+            etiqueta="Stock mínimo"
+            ayuda="Número entero entre 0 y 1.000.000 unidades (umbral de stock bajo)."
+            error={errores.stockMinimo}
+          >
             <input
               type="number"
               min="0"
@@ -269,7 +300,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
         </div>
 
         <div className="fila-campos">
-          <Campo etiqueta="Fecha de vencimiento" error={errores.fechaVencimiento}>
+          <Campo
+            etiqueta="Fecha de vencimiento"
+            ayuda="Obligatoria · seleccione la fecha; se envía como AAAA-MM-DD (p. ej. 2027-01-31)."
+            error={errores.fechaVencimiento}
+          >
             <input
               type="date"
               value={campos.fechaVencimiento}
@@ -277,7 +312,11 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
               disabled={enviando}
             />
           </Campo>
-          <Campo etiqueta="Ubicación" error={errores.ubicacion}>
+          <Campo
+            etiqueta="Ubicación"
+            ayuda="Obligatoria · máximo 80 caracteres (p. ej. Farmacia, estante A)."
+            error={errores.ubicacion}
+          >
             <input
               maxLength={80}
               placeholder="p. ej. Farmacia, estante A"
@@ -303,10 +342,12 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
 
 function Campo({
   etiqueta,
+  ayuda,
   error,
   children,
 }: {
   etiqueta: string;
+  ayuda: string;
   error?: string;
   children: ReactNode;
 }) {
@@ -314,6 +355,7 @@ function Campo({
     <label className="campo">
       <span>{etiqueta}</span>
       {children}
+      <span className="ayuda">{ayuda}</span>
       {error && (
         <span className="error-campo" role="alert">
           {error}
