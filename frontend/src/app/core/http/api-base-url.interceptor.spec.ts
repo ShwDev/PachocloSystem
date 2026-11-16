@@ -50,7 +50,8 @@ describe('apiBaseUrlInterceptor', () => {
 
     http.get('/api/pacientes').subscribe();
 
-    backend.expectOne('/api/pacientes');
+    const req = backend.expectOne('/api/pacientes');
+    expect(req.request.method).toBe('GET');
   });
 
   it('con URL base, envía la API a ese origen con el token', () => {

@@ -96,23 +96,14 @@ public abstract class MockMvcBaseTest {
      */
     @BeforeEach
     void limpiarBaseDeDatos() {
+        // Reinicia el limitador antes de cada test: es un bean único con estado y todos
+        // los tests MockMvc comparten la IP 127.0.0.1.
+        limitadorIntentos.reiniciar();
         String admin = entorno.getProperty(AdminInicial.PROP_USERNAME, "admin").trim();
         BaseDeDatosDePruebas.vaciar(mongoTemplate, admin);
         if (!repositorioUsuarios.existePorUsername(admin)) {
             adminInicial.run(new DefaultApplicationArguments());
         }
-    }
-
-    /**
-     * Fontanería de aislamiento: el limitador de intentos de login es un bean
-     * único con estado (espacios usuario/IP) y TODOS los tests MockMvc comparten
-     * la IP por defecto {@code 127.0.0.1}; sin este reinicio, los fallos
-     * acumulados por una prueba contaminarían las siguientes y el orden de
-     * ejecución decidiría el resultado.
-     */
-    @BeforeEach
-    void reiniciarLimitadorDeIntentos() {
-        limitadorIntentos.reiniciar();
     }
 
     /**

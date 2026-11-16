@@ -21,8 +21,13 @@ describe('UsuarioService', () => {
     servicio.listar(' eva ').subscribe();
     servicio.listar(' ').subscribe();
 
-    http.expectOne('/api/usuarios?q=eva').flush([]);
-    http.expectOne('/api/usuarios').flush([]);
+    const reqFiltro = http.expectOne('/api/usuarios?q=eva');
+    expect(reqFiltro.request.method).toBe('GET');
+    reqFiltro.flush([]);
+
+    const reqTodos = http.expectOne('/api/usuarios');
+    expect(reqTodos.request.method).toBe('GET');
+    reqTodos.flush([]);
   });
 
   it('crea con POST', () => {

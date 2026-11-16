@@ -25,6 +25,7 @@ export function Modal({ titulo, onCerrar, bloqueado = false, children }: Props) 
   return (
     <div
       className="fondo-modal"
+      role="presentation"
       onMouseDown={(evento) => {
         if (evento.target === evento.currentTarget && !bloqueado) {
           onCerrar();

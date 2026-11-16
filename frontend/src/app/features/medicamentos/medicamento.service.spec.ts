@@ -34,8 +34,13 @@ describe('MedicamentoService', () => {
     servicio.listar(' dolex ').subscribe();
     servicio.listar(' ').subscribe();
 
-    http.expectOne('/api/medicamentos?q=dolex').flush([]);
-    http.expectOne('/api/medicamentos').flush([]);
+    const reqFiltro = http.expectOne('/api/medicamentos?q=dolex');
+    expect(reqFiltro.request.method).toBe('GET');
+    reqFiltro.flush([]);
+
+    const reqTodos = http.expectOne('/api/medicamentos');
+    expect(reqTodos.request.method).toBe('GET');
+    reqTodos.flush([]);
   });
 
   it('consulta stock bajo, por vencer con días y vencidos', () => {
@@ -43,9 +48,17 @@ describe('MedicamentoService', () => {
     servicio.listarPorVencer(15).subscribe();
     servicio.listarVencidos().subscribe();
 
-    http.expectOne('/api/medicamentos/stock-bajo').flush([]);
-    http.expectOne('/api/medicamentos/por-vencer?dias=15').flush([]);
-    http.expectOne('/api/medicamentos/vencidos').flush([]);
+    const reqStock = http.expectOne('/api/medicamentos/stock-bajo');
+    expect(reqStock.request.method).toBe('GET');
+    reqStock.flush([]);
+
+    const reqVencer = http.expectOne('/api/medicamentos/por-vencer?dias=15');
+    expect(reqVencer.request.method).toBe('GET');
+    reqVencer.flush([]);
+
+    const reqVencidos = http.expectOne('/api/medicamentos/vencidos');
+    expect(reqVencidos.request.method).toBe('GET');
+    reqVencidos.flush([]);
   });
 
   it('registra con el stock inicial y edita sin stock, con la fecha como texto', () => {

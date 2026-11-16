@@ -80,7 +80,6 @@ export function DialogoMovimiento({
           min="1"
           step="1"
           inputMode="numeric"
-          autoFocus
           value={cantidad}
           onChange={(evento) => setCantidad(evento.target.value)}
           disabled={enviando}

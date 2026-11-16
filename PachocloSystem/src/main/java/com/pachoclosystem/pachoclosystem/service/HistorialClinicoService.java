@@ -42,7 +42,7 @@ public class HistorialClinicoService {
             Rol.ENFERMERO, EnumSet.of(TipoRegistro.EVOLUCION, TipoRegistro.SIGNOS_VITALES,
                     TipoRegistro.MEDICACION));
 
-    private static final Pattern PATRON_CONTIENE_TEXTO = Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
+    private static final Pattern PATRON_CONTIENE_TEXTO = Pattern.compile("[A-Za-zÁÉÍÓÚÑÜáéíóúñü]");
 
     private final IPacienteRepository repositorioPacientes;
     private final ITrabajadoresRepository repositorioTrabajadores;
@@ -297,7 +297,7 @@ public class HistorialClinicoService {
                 errores.add("La presión diastólica debe ser menor que la sistólica.");
             }
             String observaciones = signos.observaciones() == null ? "" : signos.observaciones().trim();
-            if (!observaciones.isEmpty() && !PATRON_CONTIENE_TEXTO.matcher(observaciones).matches()) {
+            if (!observaciones.isEmpty() && !PATRON_CONTIENE_TEXTO.matcher(observaciones).find()) {
                 errores.add("Las observaciones no pueden ser solo números.");
             }
             if (!errores.isEmpty()) {
@@ -315,7 +315,7 @@ public class HistorialClinicoService {
             errores.add("El contenido no puede estar vacío.");
         } else if (texto.length() < 5) {
             errores.add("El contenido es demasiado corto (mínimo 5 caracteres).");
-        } else if (!PATRON_CONTIENE_TEXTO.matcher(texto).matches()) {
+        } else if (!PATRON_CONTIENE_TEXTO.matcher(texto).find()) {
             errores.add("El contenido debe incluir texto descriptivo, no solo números.");
         }
         if (!errores.isEmpty()) {

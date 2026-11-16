@@ -6,7 +6,9 @@ import org.springframework.stereotype.Component;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
@@ -33,7 +35,7 @@ public class ResolutorIpCliente {
     static final String CABECERA = "X-Forwarded-For";
 
     private static final Pattern IPV4 = Pattern.compile("^\\d{1,3}(\\.\\d{1,3}){3}$");
-    private static final Pattern IPV6 = Pattern.compile("^[0-9a-fA-F:.]*:[0-9a-fA-F:.]*$");
+    private static final Pattern IPV6 = Pattern.compile("^[0-9a-fA-F.]*:[0-9a-fA-F:.]*$");
 
     /** Red y longitud de prefijo; una IP exacta es un rango /32 (IPv4) o /128 (IPv6). */
     private record Rango(byte[] red, int prefijo) {
@@ -55,6 +57,21 @@ public class ResolutorIpCliente {
             }
             int mascara = (0xFF << (8 - bitsRestantes)) & 0xFF;
             return (direccion[bytesCompletos] & mascara) == (red[bytesCompletos] & mascara);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof Rango otro && prefijo == otro.prefijo && Arrays.equals(red, otro.red);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(Arrays.hashCode(red), prefijo);
+        }
+
+        @Override
+        public String toString() {
+            return "Rango[red=" + Arrays.toString(red) + ", prefijo=" + prefijo + "]";
         }
     }
 

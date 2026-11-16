@@ -72,7 +72,6 @@ export function Login({ apiBaseUrl, aviso, onSesion, fetchImpl }: Props) {
             value={username}
             onChange={(evento) => setUsername(evento.target.value)}
             disabled={enviando}
-            autoFocus
           />
         </label>
         <label className="campo">

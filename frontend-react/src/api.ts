@@ -85,7 +85,11 @@ export async function solicitar<T>(
 
 /** Une el origen de la API (con o sin barra final) con una ruta absoluta. */
 export function urlApi(apiBaseUrl: string, ruta: string): string {
-  return `${apiBaseUrl.replace(/\/+$/, '')}${ruta}`;
+  let base = apiBaseUrl;
+  while (base.endsWith('/')) {
+    base = base.slice(0, -1);
+  }
+  return `${base}${ruta}`;
 }
 
 /** Operaciones de `/api/medicamentos` que usa la interfaz React. */

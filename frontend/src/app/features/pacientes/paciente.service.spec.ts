@@ -35,8 +35,13 @@ describe('PacienteService', () => {
     servicio.listar('  ana ').subscribe();
     servicio.listar('   ').subscribe();
 
-    http.expectOne('/api/pacientes?q=ana').flush([]);
-    http.expectOne('/api/pacientes').flush([]);
+    const reqFiltro = http.expectOne('/api/pacientes?q=ana');
+    expect(reqFiltro.request.method).toBe('GET');
+    reqFiltro.flush([]);
+
+    const reqTodos = http.expectOne('/api/pacientes');
+    expect(reqTodos.request.method).toBe('GET');
+    reqTodos.flush([]);
   });
 
   it('obtiene un paciente', () => {

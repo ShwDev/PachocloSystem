@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 @Service
 public class TrabajadorService {
 
-    private static final Pattern PATRON_CONTIENE_TEXTO = Pattern.compile(".*[A-Za-zÁÉÍÓÚÑÜáéíóúñü].*");
+    private static final Pattern PATRON_CONTIENE_TEXTO = Pattern.compile("[A-Za-zÁÉÍÓÚÑÜáéíóúñü]");
 
     private final ITrabajadoresRepository repositorio;
 
@@ -175,7 +175,7 @@ public class TrabajadorService {
             String esp = especialidad == null ? "" : especialidad.trim();
             if (esp.isEmpty()) {
                 errores.add("La especialidad es obligatoria.");
-            } else if (esp.length() < 3 || !PATRON_CONTIENE_TEXTO.matcher(esp).matches()) {
+            } else if (esp.length() < 3 || !PATRON_CONTIENE_TEXTO.matcher(esp).find()) {
                 errores.add("La especialidad debe ser un texto descriptivo (mínimo 3 caracteres).");
             }
         } else if ("Enfermero".equals(rol)) {

@@ -22,16 +22,26 @@ describe('HistorialService', () => {
     servicio.listar('autor', ' ana ').subscribe();
     servicio.listar('todos', '  ').subscribe();
 
-    http.expectOne('/api/historial?filtro=autor&q=ana').flush([]);
-    http.expectOne('/api/historial?filtro=todos').flush([]);
+    const reqAutor = http.expectOne('/api/historial?filtro=autor&q=ana');
+    expect(reqAutor.request.method).toBe('GET');
+    reqAutor.flush([]);
+
+    const reqTodos = http.expectOne('/api/historial?filtro=todos');
+    expect(reqTodos.request.method).toBe('GET');
+    reqTodos.flush([]);
   });
 
   it('lista el historial de un paciente, opcionalmente filtrado por autor', () => {
     servicio.listarDePaciente('PAC-0001').subscribe();
     servicio.listarDePaciente('PAC-0001', 'DOC').subscribe();
 
-    http.expectOne('/api/pacientes/PAC-0001/historial').flush([]);
-    http.expectOne('/api/pacientes/PAC-0001/historial?q=DOC').flush([]);
+    const reqPaciente = http.expectOne('/api/pacientes/PAC-0001/historial');
+    expect(reqPaciente.request.method).toBe('GET');
+    reqPaciente.flush([]);
+
+    const reqFiltrado = http.expectOne('/api/pacientes/PAC-0001/historial?q=DOC');
+    expect(reqFiltrado.request.method).toBe('GET');
+    reqFiltrado.flush([]);
   });
 
   it('devuelve los registros del más reciente al más antiguo', () => {

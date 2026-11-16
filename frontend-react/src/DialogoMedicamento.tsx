@@ -173,7 +173,6 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
         <div className="fila-campos">
           <Campo etiqueta="Nombre comercial" error={errores.nombre}>
             <input
-              autoFocus
               maxLength={80}
               value={campos.nombre}
               onChange={(e) => cambiar('nombre', e.target.value)}
