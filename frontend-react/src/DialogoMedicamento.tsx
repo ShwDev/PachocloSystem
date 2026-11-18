@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { mensajesDeError, type ClienteMedicamentos } from './api';
 import { Modal } from './Modal';
 import {
@@ -31,6 +31,15 @@ interface Campos {
 }
 
 type Errores = Partial<Record<keyof Campos, string>>;
+type Tocados = Partial<Record<keyof Campos, boolean>>;
+
+/** Lote alfanumérico: letras, números, espacios y separadores habituales (L-2026-01). */
+const PATRON_LOTE = /^[0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ][0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ ._/-]*$/;
+/** Texto legible: al menos una letra (evita nombres o ubicaciones solo numéricos). */
+const PATRON_TEXTO = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
+/** Concentración con número y unidad (500 mg, 5 ml, 10 %). */
+const PATRON_CONCENTRACION =
+  /^(?=.*\d)(?=.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ%µμ])[0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ%µμ .,/+*-]+$/;
 
 function camposIniciales(medicamento?: Medicamento): Campos {
   return {
@@ -47,15 +56,35 @@ function camposIniciales(medicamento?: Medicamento): Campos {
   };
 }
 
-/** Mismas reglas que `CrearMedicamentoRequest` del backend. */
+/** Comprueba que una fecha AAAA-MM-DD exista realmente (rechaza 2026-02-31). */
+function esFechaValida(valor: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    return false;
+  }
+  const [anio, mes, dia] = valor.split('-').map(Number);
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  return (
+    fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia
+  );
+}
+
+/** Mismas reglas que `CrearMedicamentoRequest` del backend, con tipos estrictos. */
 function validar(campos: Campos, esAlta: boolean): Errores {
   const errores: Errores = {};
-  const texto = (campo: keyof Campos, maximo: number, obligatorio: string, largo: string) => {
+
+  const texto = (
+    campo: 'nombre' | 'principioActivo' | 'laboratorio' | 'ubicacion',
+    maximo: number,
+    obligatorio: string,
+    largo: string,
+  ) => {
     const valor = campos[campo].trim();
     if (!valor) {
       errores[campo] = obligatorio;
     } else if (valor.length > maximo) {
       errores[campo] = largo;
+    } else if (!PATRON_TEXTO.test(valor)) {
+      errores[campo] = 'Escriba un texto con al menos una letra.';
     }
   };
 
@@ -71,19 +100,32 @@ function validar(campos: Campos, esAlta: boolean): Errores {
   } else if (!PRESENTACIONES.includes(campos.presentacion)) {
     errores.presentacion = 'La presentación no es válida.';
   }
-  texto(
-    'concentracion',
-    40,
-    'La concentración es obligatoria.',
-    'La concentración no puede superar 40 caracteres.',
-  );
+
+  const concentracion = campos.concentracion.trim();
+  if (!concentracion) {
+    errores.concentracion = 'La concentración es obligatoria.';
+  } else if (concentracion.length > 40) {
+    errores.concentracion = 'La concentración no puede superar 40 caracteres.';
+  } else if (!PATRON_CONCENTRACION.test(concentracion)) {
+    errores.concentracion = 'La concentración debe incluir un número y una unidad (p. ej. 500 mg).';
+  }
+
   texto(
     'laboratorio',
     80,
     'El laboratorio es obligatorio.',
     'El laboratorio no puede superar 80 caracteres.',
   );
-  texto('lote', 40, 'El lote es obligatorio.', 'El lote no puede superar 40 caracteres.');
+
+  const lote = campos.lote.trim();
+  if (!lote) {
+    errores.lote = 'El lote es obligatorio.';
+  } else if (lote.length > 40) {
+    errores.lote = 'El lote no puede superar 40 caracteres.';
+  } else if (!PATRON_LOTE.test(lote)) {
+    errores.lote = 'El lote solo admite letras, números, espacios y guiones (p. ej. L-2026-01).';
+  }
+
   texto(
     'ubicacion',
     80,
@@ -96,15 +138,18 @@ function validar(campos: Campos, esAlta: boolean): Errores {
     if (!valor) {
       errores[campo] = mensaje;
     } else if (!/^\d+$/.test(valor) || Number(valor) > 1_000_000) {
-      errores[campo] = `${mensaje} (entre 0 y 1000000)`;
+      errores[campo] = `${mensaje} Debe ser un número entero entre 0 y 1000000.`;
     }
   };
   entero('stockMinimo', 'El stock mínimo debe ser un entero.');
   if (esAlta) {
     entero('cantidadStock', 'La cantidad en stock debe ser un entero.');
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(campos.fechaVencimiento)) {
+
+  if (!campos.fechaVencimiento) {
     errores.fechaVencimiento = 'La fecha de vencimiento es obligatoria.';
+  } else if (!esFechaValida(campos.fechaVencimiento)) {
+    errores.fechaVencimiento = 'La fecha de vencimiento no es válida.';
   }
 
   return errores;
@@ -114,20 +159,32 @@ function validar(campos: Campos, esAlta: boolean): Errores {
 export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: Props) {
   const esAlta = medicamento === undefined;
   const [campos, setCampos] = useState<Campos>(() => camposIniciales(medicamento));
-  const [errores, setErrores] = useState<Errores>({});
+  const [tocados, setTocados] = useState<Tocados>({});
   const [errorServidor, setErrorServidor] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  const errores = useMemo(() => validar(campos, esAlta), [campos, esAlta]);
+  const valido = Object.keys(errores).length === 0;
+  const errorDe = (campo: keyof Campos) => (tocados[campo] ? errores[campo] : undefined);
+
   function cambiar<K extends keyof Campos>(campo: K, valor: Campos[K]) {
     setCampos((actual) => ({ ...actual, [campo]: valor }));
+    setTocados((actual) => (actual[campo] ? actual : { ...actual, [campo]: true }));
+    setErrorServidor(null);
+  }
+
+  function tocar(campo: keyof Campos) {
+    setTocados((actual) => (actual[campo] ? actual : { ...actual, [campo]: true }));
+  }
+
+  function marcarTodos() {
+    setTocados(Object.fromEntries(Object.keys(campos).map((campo) => [campo, true])) as Tocados);
   }
 
   async function guardar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
-    const encontrados = validar(campos, esAlta);
-    setErrores(encontrados);
-    setErrorServidor(null);
-    if (Object.keys(encontrados).length > 0) {
+    marcarTodos();
+    if (!valido) {
       return;
     }
 
@@ -174,24 +231,28 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
           <Campo
             etiqueta="Nombre comercial"
             ayuda="Obligatorio · entre 1 y 80 caracteres."
-            error={errores.nombre}
+            error={errorDe('nombre')}
           >
             <input
               maxLength={80}
               value={campos.nombre}
+              aria-invalid={errorDe('nombre') ? true : undefined}
               onChange={(e) => cambiar('nombre', e.target.value)}
+              onBlur={() => tocar('nombre')}
               disabled={enviando}
             />
           </Campo>
           <Campo
             etiqueta="Principio activo"
             ayuda="Obligatorio · entre 1 y 80 caracteres."
-            error={errores.principioActivo}
+            error={errorDe('principioActivo')}
           >
             <input
               maxLength={80}
               value={campos.principioActivo}
+              aria-invalid={errorDe('principioActivo') ? true : undefined}
               onChange={(e) => cambiar('principioActivo', e.target.value)}
+              onBlur={() => tocar('principioActivo')}
               disabled={enviando}
             />
           </Campo>
@@ -201,11 +262,13 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
           <Campo
             etiqueta="Presentación"
             ayuda="Obligatoria · seleccione una forma farmacéutica de la lista."
-            error={errores.presentacion}
+            error={errorDe('presentacion')}
           >
             <select
               value={campos.presentacion}
+              aria-invalid={errorDe('presentacion') ? true : undefined}
               onChange={(e) => cambiar('presentacion', e.target.value as Presentacion)}
+              onBlur={() => tocar('presentacion')}
               disabled={enviando}
             >
               <option value="" disabled>
@@ -220,14 +283,16 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
           </Campo>
           <Campo
             etiqueta="Concentración"
-            ayuda="Obligatoria · máximo 40 caracteres, con unidad (p. ej. 500 mg, 5 ml, 10 %)."
-            error={errores.concentracion}
+            ayuda="Obligatoria · máximo 40 caracteres, con número y unidad (p. ej. 500 mg, 5 ml, 10 %)."
+            error={errorDe('concentracion')}
           >
             <input
               maxLength={40}
               placeholder="p. ej. 500 mg"
               value={campos.concentracion}
+              aria-invalid={errorDe('concentracion') ? true : undefined}
               onChange={(e) => cambiar('concentracion', e.target.value)}
+              onBlur={() => tocar('concentracion')}
               disabled={enviando}
             />
           </Campo>
@@ -237,24 +302,28 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
           <Campo
             etiqueta="Laboratorio"
             ayuda="Obligatorio · entre 1 y 80 caracteres."
-            error={errores.laboratorio}
+            error={errorDe('laboratorio')}
           >
             <input
               maxLength={80}
               value={campos.laboratorio}
+              aria-invalid={errorDe('laboratorio') ? true : undefined}
               onChange={(e) => cambiar('laboratorio', e.target.value)}
+              onBlur={() => tocar('laboratorio')}
               disabled={enviando}
             />
           </Campo>
           <Campo
             etiqueta="Lote"
-            ayuda="Obligatorio · entre 1 y 40 caracteres (p. ej. L-2026-01)."
-            error={errores.lote}
+            ayuda="Obligatorio · entre 1 y 40 caracteres, con letras, números, espacios y guiones (p. ej. L-2026-01)."
+            error={errorDe('lote')}
           >
             <input
               maxLength={40}
               value={campos.lote}
+              aria-invalid={errorDe('lote') ? true : undefined}
               onChange={(e) => cambiar('lote', e.target.value)}
+              onBlur={() => tocar('lote')}
               disabled={enviando}
             />
           </Campo>
@@ -269,15 +338,16 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
             <Campo
               etiqueta="Stock inicial"
               ayuda="Número entero entre 0 y 1.000.000 unidades."
-              error={errores.cantidadStock}
+              error={errorDe('cantidadStock')}
             >
               <input
-                type="number"
-                min="0"
-                max="1000000"
-                step="1"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={campos.cantidadStock}
+                aria-invalid={errorDe('cantidadStock') ? true : undefined}
                 onChange={(e) => cambiar('cantidadStock', e.target.value)}
+                onBlur={() => tocar('cantidadStock')}
                 disabled={enviando}
               />
             </Campo>
@@ -285,15 +355,16 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
           <Campo
             etiqueta="Stock mínimo"
             ayuda="Número entero entre 0 y 1.000.000 unidades (umbral de stock bajo)."
-            error={errores.stockMinimo}
+            error={errorDe('stockMinimo')}
           >
             <input
-              type="number"
-              min="0"
-              max="1000000"
-              step="1"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={campos.stockMinimo}
+              aria-invalid={errorDe('stockMinimo') ? true : undefined}
               onChange={(e) => cambiar('stockMinimo', e.target.value)}
+              onBlur={() => tocar('stockMinimo')}
               disabled={enviando}
             />
           </Campo>
@@ -303,35 +374,45 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
           <Campo
             etiqueta="Fecha de vencimiento"
             ayuda="Obligatoria · seleccione la fecha; se envía como AAAA-MM-DD (p. ej. 2027-01-31)."
-            error={errores.fechaVencimiento}
+            error={errorDe('fechaVencimiento')}
           >
             <input
               type="date"
               value={campos.fechaVencimiento}
+              aria-invalid={errorDe('fechaVencimiento') ? true : undefined}
               onChange={(e) => cambiar('fechaVencimiento', e.target.value)}
+              onBlur={() => tocar('fechaVencimiento')}
               disabled={enviando}
             />
           </Campo>
           <Campo
             etiqueta="Ubicación"
             ayuda="Obligatoria · máximo 80 caracteres (p. ej. Farmacia, estante A)."
-            error={errores.ubicacion}
+            error={errorDe('ubicacion')}
           >
             <input
               maxLength={80}
               placeholder="p. ej. Farmacia, estante A"
               value={campos.ubicacion}
+              aria-invalid={errorDe('ubicacion') ? true : undefined}
               onChange={(e) => cambiar('ubicacion', e.target.value)}
+              onBlur={() => tocar('ubicacion')}
               disabled={enviando}
             />
           </Campo>
         </div>
 
+        {!valido && !enviando && (
+          <p className="ayuda-formulario" role="status">
+            Complete correctamente los campos obligatorios para continuar.
+          </p>
+        )}
+
         <div className="acciones-modal">
           <button type="button" className="boton secundario" onClick={onCerrar} disabled={enviando}>
             Cancelar
           </button>
-          <button type="submit" className="boton primario" disabled={enviando}>
+          <button type="submit" className="boton primario" disabled={enviando || !valido}>
             {enviando ? 'Guardando…' : medicamento ? 'Guardar cambios' : 'Registrar'}
           </button>
         </div>
