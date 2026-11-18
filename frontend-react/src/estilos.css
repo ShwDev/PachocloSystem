@@ -348,8 +348,22 @@ select:disabled {
   color: #44474e;
 }
 
-input[aria-invalid='true'] {
+input[aria-invalid='true'],
+select[aria-invalid='true'] {
   border-color: #ba1a1a;
+  background: #fff8f7;
+}
+
+input[aria-invalid='true']:focus,
+select[aria-invalid='true']:focus {
+  outline-color: #ba1a1a;
+  border-color: #ba1a1a;
+}
+
+.ayuda-formulario {
+  margin: 0;
+  color: #44474e;
+  font-size: 12px;
 }
 
 .error-campo {

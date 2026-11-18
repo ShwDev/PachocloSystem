@@ -136,6 +136,63 @@ describe('interfaz React de medicamentos', () => {
     ).toBeTruthy();
   });
 
+  it('marca en rojo el lote inválido y bloquea el registro', async () => {
+    const cliente = crearClienteFalso();
+    render(<Medicamentos cliente={cliente} rol="ADMIN" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo medicamento' }));
+    const dialogo = await screen.findByRole('dialog');
+
+    const completar = (etiqueta: string, valor: string) =>
+      fireEvent.change(within(dialogo).getByLabelText(new RegExp(`^${etiqueta}`)), {
+        target: { value: valor },
+      });
+
+    completar('Nombre comercial', 'Ibuprofeno');
+    completar('Principio activo', 'Ibuprofeno');
+    completar('Presentación', 'TABLETA');
+    completar('Concentración', '400 mg');
+    completar('Laboratorio', 'Genfar');
+    completar('Lote', 'L-2026-01');
+    completar('Stock inicial', '10');
+    completar('Stock mínimo', '5');
+    completar('Fecha de vencimiento', '2027-01-31');
+    completar('Ubicación', 'Farmacia');
+
+    const registrar = within(dialogo).getByRole('button', { name: 'Registrar' });
+    expect((registrar as HTMLButtonElement).disabled).toBe(false);
+
+    const lote = within(dialogo).getByLabelText(/^Lote/);
+    fireEvent.change(lote, { target: { value: '%%%' } });
+
+    expect(lote.getAttribute('aria-invalid')).toBe('true');
+    expect(within(dialogo).getByText(/El lote solo admite letras/)).toBeTruthy();
+    expect((registrar as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('marca en rojo una cantidad de movimiento no numérica y bloquea el envío', async () => {
+    const moverStock = vi.fn(async () => VIGENTE);
+    const cliente = crearClienteFalso({
+      listar: vi.fn(async () => [VIGENTE]),
+      moverStock,
+    });
+
+    render(<Medicamentos cliente={cliente} rol="ADMIN" />);
+    await screen.findByText('Ibuprofeno 400 mg');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salida de stock de Ibuprofeno 400 mg' }));
+    const dialogo = await screen.findByRole('dialog');
+    const cantidad = within(dialogo).getByLabelText('Cantidad de unidades');
+
+    fireEvent.change(cantidad, { target: { value: 'tres' } });
+
+    expect(cantidad.getAttribute('aria-invalid')).toBe('true');
+    expect(within(dialogo).getByText('La cantidad solo admite números enteros.')).toBeTruthy();
+    const enviar = within(dialogo).getByRole('button', { name: 'Registrar salida' });
+    expect((enviar as HTMLButtonElement).disabled).toBe(true);
+    expect(moverStock).not.toHaveBeenCalled();
+  });
+
   it('filtra con el buscador tras la espera de escritura', async () => {
     const listar = vi.fn<ClienteMedicamentos['listar']>(async () => [VIGENTE]);
     render(<Medicamentos cliente={crearClienteFalso({ listar })} rol="ADMIN" />);

@@ -209,10 +209,9 @@ export function Medicamentos({ cliente, rol }: PropsMedicamentos) {
           <label className="dias">
             <span>Vencen en los próximos (días)</span>
             <input
-              type="number"
-              min="1"
-              max="365"
-              step="1"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={dias}
               aria-invalid={!diasValidos}
               onChange={(evento) => setDias(evento.target.value)}
