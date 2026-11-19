@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { crearCliente } from './api';
 import { Login } from './Login';
+import { LogoMedicamentos } from './LogoMedicamentos';
 import { Medicamentos } from './Medicamentos';
 import { borrarSesion, guardarSesion, leerSesion, type Sesion } from './sesion';
 
@@ -75,7 +76,10 @@ export function App({ apiBaseUrl, fetchImpl }: Props) {
   return (
     <>
       <header className="barra-app">
-        <span className="marca">PachocloSystem · Medicamentos</span>
+        <span className="marca">
+          <LogoMedicamentos tamano={30} />
+          <span>PachocloSystem · Medicamentos</span>
+        </span>
         <div className="usuario">
           <span>
             {usuario.nombreCompleto || usuario.username}{' '}

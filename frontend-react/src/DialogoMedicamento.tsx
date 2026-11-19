@@ -1,6 +1,8 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { mensajesDeError, type ClienteMedicamentos } from './api';
 import { Modal } from './Modal';
+import { SelectorDesplegable } from './SelectorDesplegable';
+import { SelectorFecha } from './SelectorFecha';
 import {
   ETIQUETAS_PRESENTACION,
   ETIQUETAS_UNIDAD_CONCENTRACION,
@@ -11,6 +13,16 @@ import {
   type Presentacion,
   type UnidadConcentracion,
 } from './tipos';
+
+const OPCIONES_PRESENTACION = PRESENTACIONES.map((p) => ({
+  valor: p,
+  etiqueta: ETIQUETAS_PRESENTACION[p],
+}));
+
+const OPCIONES_UNIDAD = UNIDADES_CONCENTRACION.map((u) => ({
+  valor: u,
+  etiqueta: ETIQUETAS_UNIDAD_CONCENTRACION[u],
+}));
 
 interface Props {
   cliente: ClienteMedicamentos;
@@ -103,6 +115,19 @@ function esFechaValida(valor: string): boolean {
   }
   const [anio, mes, dia] = valor.split('-').map(Number);
   const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  const opcionesPresentacion = useMemo(
+    () => PRESENTACIONES.map((p) => ({ valor: p, etiqueta: ETIQUETAS_PRESENTACION[p] })),
+    [],
+  );
+  const opcionesUnidad = useMemo(
+    () =>
+      UNIDADES_CONCENTRACION.map((u) => ({
+        valor: u,
+        etiqueta: ETIQUETAS_UNIDAD_CONCENTRACION[u],
+      })),
+    [],
+  );
+
   return (
     fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia
   );
@@ -316,25 +341,18 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
         <div className="fila-campos">
           <Campo
             etiqueta="Presentación"
-            ayuda="Obligatoria · seleccione una forma farmacéutica de la lista."
+            ayuda="Obligatoria · seleccione una forma farmacéutica."
             error={errorDe('presentacion')}
           >
-            <select
-              value={campos.presentacion}
-              aria-invalid={errorDe('presentacion') ? true : undefined}
-              onChange={(e) => cambiar('presentacion', e.target.value as Presentacion)}
+            <SelectorDesplegable
+              ariaLabel="Presentación"
+              valor={campos.presentacion}
+              opciones={OPCIONES_PRESENTACION}
+              invalido={Boolean(errorDe('presentacion'))}
+              deshabilitado={enviando}
+              onChange={(valor) => cambiar('presentacion', valor)}
               onBlur={() => tocar('presentacion')}
-              disabled={enviando}
-            >
-              <option value="" disabled>
-                Seleccione…
-              </option>
-              {PRESENTACIONES.map((presentacion) => (
-                <option key={presentacion} value={presentacion}>
-                  {ETIQUETAS_PRESENTACION[presentacion]}
-                </option>
-              ))}
-            </select>
+            />
           </Campo>
           <fieldset className="campo grupo-concentracion">
             <legend>Concentración</legend>
@@ -352,38 +370,29 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
                 onBlur={() => tocar('concentracionValor')}
                 disabled={enviando}
               />
-              <select
-                aria-label="Unidad de la concentración"
-                value={campos.concentracionUnidad}
-                aria-invalid={errorDe('concentracionUnidad') ? true : undefined}
-                onChange={(e) =>
-                  cambiar('concentracionUnidad', e.target.value as UnidadConcentracion | '')
-                }
+              <SelectorDesplegable
+                ariaLabel="Unidad de la concentración"
+                placeholder="Unidad…"
+                valor={campos.concentracionUnidad}
+                opciones={OPCIONES_UNIDAD}
+                invalido={Boolean(errorDe('concentracionUnidad'))}
+                deshabilitado={enviando}
+                onChange={(valor) => cambiar('concentracionUnidad', valor)}
                 onBlur={() => tocar('concentracionUnidad')}
-                disabled={enviando}
-              >
-                <option value="" disabled>
-                  Unidad…
-                </option>
-                {UNIDADES_CONCENTRACION.map((unidad) => (
-                  <option key={unidad} value={unidad}>
-                    {ETIQUETAS_UNIDAD_CONCENTRACION[unidad]}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
-            <span className="ayuda">
-              Obligatoria · escriba solo números y elija la unidad de la lista (p. ej. 500 mg).
-            </span>
-            {concentracionAnteriorInvalida && (
+            {concentracionAnteriorInvalida ? (
               <span className="aviso-campo" role="status">
                 El valor actual «{concentracionAnteriorInvalida}» no es válido; indique el número y
                 elija una unidad.
               </span>
-            )}
-            {errorConcentracion && (
+            ) : errorConcentracion ? (
               <span className="error-campo" role="alert">
                 {errorConcentracion}
+              </span>
+            ) : (
+              <span className="ayuda">
+                Obligatoria · número y unidad de la lista (p. ej. 500 mg).
               </span>
             )}
           </fieldset>
@@ -464,16 +473,16 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
         <div className="fila-campos">
           <Campo
             etiqueta="Fecha de vencimiento"
-            ayuda="Obligatoria · seleccione la fecha; se envía como AAAA-MM-DD (p. ej. 2027-01-31)."
+            ayuda="Obligatoria · formato AAAA-MM-DD (p. ej. 2027-01-31)."
             error={errorDe('fechaVencimiento')}
           >
-            <input
-              type="date"
-              value={campos.fechaVencimiento}
-              aria-invalid={errorDe('fechaVencimiento') ? true : undefined}
-              onChange={(e) => cambiar('fechaVencimiento', e.target.value)}
+            <SelectorFecha
+              ariaLabel="Fecha de vencimiento"
+              valor={campos.fechaVencimiento}
+              invalido={Boolean(errorDe('fechaVencimiento'))}
+              deshabilitado={enviando}
+              onChange={(valor) => cambiar('fechaVencimiento', valor)}
               onBlur={() => tocar('fechaVencimiento')}
-              disabled={enviando}
             />
           </Campo>
           <Campo
@@ -527,11 +536,12 @@ function Campo({
     <label className="campo">
       <span>{etiqueta}</span>
       {children}
-      <span className="ayuda">{ayuda}</span>
-      {error && (
+      {error ? (
         <span className="error-campo" role="alert">
           {error}
         </span>
+      ) : (
+        <span className="ayuda">{ayuda}</span>
       )}
     </label>
   );

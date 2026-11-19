@@ -147,12 +147,16 @@ describe('interfaz React de medicamentos', () => {
       fireEvent.change(within(dialogo).getByLabelText(new RegExp(`^${etiqueta}`)), {
         target: { value: valor },
       });
+    const elegir = (etiqueta: string, textoOpcion: string) => {
+      fireEvent.click(within(dialogo).getByRole('button', { name: new RegExp(`^${etiqueta}`) }));
+      fireEvent.mouseDown(within(dialogo).getByRole('option', { name: textoOpcion }));
+    };
 
     completar('Nombre comercial', 'Ibuprofeno');
     completar('Principio activo', 'Ibuprofeno');
-    completar('Presentación', 'TABLETA');
+    elegir('Presentación', 'Tableta');
     completar('Valor de la concentración', '400');
-    completar('Unidad de la concentración', 'mg');
+    elegir('Unidad de la concentración', 'Miligramo (mg)');
     completar('Laboratorio', 'Genfar');
     completar('Lote', 'L-2026-01');
     completar('Stock inicial', '10');
@@ -182,15 +186,14 @@ describe('interfaz React de medicamentos', () => {
     fireEvent.change(valor, { target: { value: '+ 1000 de aura' } });
     expect(valor.value).toBe('1000');
 
-    const unidad = within(dialogo).getByLabelText(
-      'Unidad de la concentración',
-    ) as HTMLSelectElement;
-    expect(unidad.tagName).toBe('SELECT');
-    expect(within(unidad).getByRole('option', { name: 'Miligramo (mg)' })).toBeTruthy();
+    const unidad = within(dialogo).getByRole('button', { name: 'Unidad de la concentración' });
+    fireEvent.click(unidad);
+    expect(within(dialogo).getByRole('option', { name: 'Miligramo (mg)' })).toBeTruthy();
 
     const registrar = within(dialogo).getByRole('button', { name: 'Registrar' });
     expect((registrar as HTMLButtonElement).disabled).toBe(true);
 
+    fireEvent.click(unidad);
     fireEvent.blur(unidad);
     expect(within(dialogo).getByText('Seleccione una unidad de medida de la lista.')).toBeTruthy();
   });
@@ -224,8 +227,8 @@ describe('interfaz React de medicamentos', () => {
       (within(dialogo).getByLabelText('Valor de la concentración') as HTMLInputElement).value,
     ).toBe('250');
     expect(
-      (within(dialogo).getByLabelText('Unidad de la concentración') as HTMLSelectElement).value,
-    ).toBe('mg/5 ml');
+      within(dialogo).getByRole('button', { name: 'Unidad de la concentración' }).textContent,
+    ).toContain('Miligramo por 5 mililitros (mg/5 ml)');
     expect(within(dialogo).queryByText(/no es válido/)).toBeNull();
   });
 

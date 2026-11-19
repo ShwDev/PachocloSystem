@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { mensajesDeError } from './api';
 import { iniciarSesion } from './auth';
+import { LogoMedicamentos } from './LogoMedicamentos';
 import type { Sesion } from './sesion';
 
 interface Props {
@@ -44,10 +45,15 @@ export function Login({ apiBaseUrl, aviso, onSesion, fetchImpl }: Props) {
   return (
     <main className="pagina-login">
       <form className="tarjeta-login" onSubmit={(evento) => void enviar(evento)} noValidate>
-        <h1>
-          Medicamentos <span className="etiqueta-framework">React</span>
-        </h1>
-        <p className="subtitulo">Inicie sesión con su cuenta de PachocloSystem.</p>
+        <div className="login-cabecera">
+          <LogoMedicamentos tamano={40} />
+          <div>
+            <h1>
+              Medicamentos <span className="etiqueta-framework">React</span>
+            </h1>
+            <p className="subtitulo">Inicie sesión con su cuenta de PachocloSystem.</p>
+          </div>
+        </div>
 
         {aviso && errores.length === 0 && (
           <div className="aviso-info" role="status">
