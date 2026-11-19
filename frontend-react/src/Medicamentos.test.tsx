@@ -217,9 +217,7 @@ describe('interfaz React de medicamentos', () => {
     const cliente = crearClienteFalso({ listar: vi.fn(async () => [jarabe]) });
     render(<Medicamentos cliente={cliente} rol="ADMIN" />);
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Editar Ibuprofeno 250 mg/5 ml' }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar Ibuprofeno 250 mg/5 ml' }));
     const dialogo = await screen.findByRole('dialog');
 
     expect(
