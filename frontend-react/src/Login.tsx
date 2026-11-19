@@ -48,9 +48,7 @@ export function Login({ apiBaseUrl, aviso, onSesion, fetchImpl }: Props) {
         <div className="login-cabecera">
           <LogoMedicamentos tamano={40} />
           <div>
-            <h1>
-              Medicamentos <span className="etiqueta-framework">React</span>
-            </h1>
+            <h1>Medicamentos</h1>
             <p className="subtitulo">Inicie sesión con su cuenta de PachocloSystem.</p>
           </div>
         </div>

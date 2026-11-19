@@ -161,7 +161,10 @@ describe('interfaz React de medicamentos', () => {
     completar('Lote', 'L-2026-01');
     completar('Stock inicial', '10');
     completar('Stock mínimo', '5');
-    completar('Fecha de vencimiento', '2027-01-31');
+    completar('Fecha de vencimiento', '31012027');
+    expect(
+      (within(dialogo).getByLabelText(/^Fecha de vencimiento/) as HTMLInputElement).value,
+    ).toBe('31/01/2027');
     completar('Ubicación', 'Farmacia');
 
     const registrar = within(dialogo).getByRole('button', { name: 'Registrar' });

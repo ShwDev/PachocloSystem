@@ -209,7 +209,7 @@ function validar(campos: Campos, esAlta: boolean): Errores {
   if (!campos.fechaVencimiento) {
     errores.fechaVencimiento = 'La fecha de vencimiento es obligatoria.';
   } else if (!esFechaValida(campos.fechaVencimiento)) {
-    errores.fechaVencimiento = 'La fecha de vencimiento no es válida.';
+    errores.fechaVencimiento = 'La fecha no es válida (use dd/mm/aaaa).';
   }
 
   return errores;
@@ -460,7 +460,7 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
         <div className="fila-campos">
           <Campo
             etiqueta="Fecha de vencimiento"
-            ayuda="Obligatoria · formato AAAA-MM-DD (p. ej. 2027-01-31)."
+            ayuda="Obligatoria · formato dd/mm/aaaa (p. ej. 31/01/2027)."
             error={errorDe('fechaVencimiento')}
           >
             <SelectorFecha
