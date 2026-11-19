@@ -285,4 +285,26 @@ describe('interfaz React de medicamentos', () => {
     fireEvent.keyDown(presentacion, { key: 'g' });
     expect(presentacion.textContent).toContain('Gotas');
   });
+
+  it('no marca error mientras se escribe una fecha parcial válida, pero sí si el día/mes es imposible o al salir incompleta', async () => {
+    render(<Medicamentos cliente={crearClienteFalso()} rol="ADMIN" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo medicamento' }));
+    const dialogo = await screen.findByRole('dialog');
+
+    const fecha = within(dialogo).getByLabelText(/^Fecha de vencimiento/) as HTMLInputElement;
+
+    // Prefijo válido mientras escribe: sin error.
+    fireEvent.change(fecha, { target: { value: '120520' } });
+    expect(fecha.value).toBe('12/05/20');
+    expect(fecha.getAttribute('aria-invalid')).toBeNull();
+
+    // Al salir del campo incompleta: marca error.
+    fireEvent.blur(fecha);
+    expect(fecha.getAttribute('aria-invalid')).toBe('true');
+
+    // Mes inexistente (32): marca error inmediatamente al escribir.
+    fireEvent.change(fecha, { target: { value: '12321' } });
+    expect(fecha.value).toBe('12/32/1');
+    expect(fecha.getAttribute('aria-invalid')).toBe('true');
+  });
 });

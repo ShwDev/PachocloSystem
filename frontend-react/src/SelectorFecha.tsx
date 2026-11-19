@@ -36,6 +36,49 @@ export function enmascararFecha(texto: string): string {
     .join('/');
 }
 
+/**
+ * Indica si una fecha parcial o completa en `dd/mm/aaaa` ya es imposible
+ * (día o mes inexistente, p. ej. `32`, `12/32`, `31/04` o `29/02/2026`).
+ * Devuelve `false` mientras el prefijo tecleado siga pudiendo completarse en una fecha válida.
+ */
+export function esFechaParcialImposible(valor: string): boolean {
+  const limpio = valor.trim();
+  if (!limpio || parsearIso(limpio)) {
+    return false;
+  }
+  const digitos = limpio.replace(/\D/g, '');
+  if (digitos.length === 0) {
+    return true;
+  }
+  if (Number(digitos[0]) > 3) {
+    return true;
+  }
+  if (digitos.length >= 2) {
+    const dia = Number(digitos.slice(0, 2));
+    if (dia < 1 || dia > 31) {
+      return true;
+    }
+    if (digitos.length >= 3 && Number(digitos[2]) > 1) {
+      return true;
+    }
+    if (digitos.length >= 4) {
+      const mes = Number(digitos.slice(2, 4));
+      if (mes < 1 || mes > 12) {
+        return true;
+      }
+      // Año bisiesto de referencia para permitir 29/02 hasta completar el año.
+      const maxDiaMes = new Date(2024, mes, 0).getDate();
+      if (dia > maxDiaMes) {
+        return true;
+      }
+    }
+  }
+  if (digitos.length >= DIGITOS_FECHA) {
+    return ddMmAaaaAIso(enmascararFecha(digitos)) === null;
+  }
+  return false;
+}
+
 /** Calcula la posición del cursor contando solo dígitos para que no salte al insertar `/`. */
 function posicionDelCursor(escrito: string, cursor: number, enmascarado: string): number {
   const digitosDelante = escrito.slice(0, cursor).replace(/\D/g, '').length;

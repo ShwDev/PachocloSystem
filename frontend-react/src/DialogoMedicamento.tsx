@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { mensajesDeError, type ClienteMedicamentos } from './api';
 import { Modal } from './Modal';
 import { SelectorDesplegable } from './SelectorDesplegable';
-import { SelectorFecha } from './SelectorFecha';
+import { esFechaParcialImposible, SelectorFecha } from './SelectorFecha';
 import {
   ETIQUETAS_PRESENTACION,
   ETIQUETAS_UNIDAD_CONCENTRACION,
@@ -236,7 +236,16 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
 
   function cambiar<K extends keyof Campos>(campo: K, valor: Campos[K]) {
     setCampos((actual) => ({ ...actual, [campo]: valor }));
-    setTocados((actual) => (actual[campo] ? actual : { ...actual, [campo]: true }));
+    if (campo === 'fechaVencimiento') {
+      const textoFecha = String(valor);
+      const mostrarErrorAhora = esFechaParcialImposible(textoFecha);
+      setTocados((actual) => ({
+        ...actual,
+        fechaVencimiento: mostrarErrorAhora ? true : esFechaValida(textoFecha) ? true : false,
+      }));
+    } else {
+      setTocados((actual) => (actual[campo] ? actual : { ...actual, [campo]: true }));
+    }
     setErrorServidor(null);
   }
 
