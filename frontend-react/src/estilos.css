@@ -575,6 +575,38 @@ select[aria-invalid='true']:focus {
   font-size: 12px;
 }
 
+.grupo-concentracion {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.grupo-concentracion > legend {
+  padding: 0;
+  color: #44474e;
+  font-size: 12px;
+}
+
+.fila-concentracion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fila-concentracion input {
+  flex: 1 1 110px;
+}
+
+.fila-concentracion select {
+  flex: 1 1 170px;
+}
+
+.aviso-campo {
+  color: #8a5100;
+  font-size: 12px;
+}
+
 .ayuda {
   color: #44474e;
   font-size: 12px;

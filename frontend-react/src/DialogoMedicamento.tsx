@@ -3,10 +3,13 @@ import { mensajesDeError, type ClienteMedicamentos } from './api';
 import { Modal } from './Modal';
 import {
   ETIQUETAS_PRESENTACION,
+  ETIQUETAS_UNIDAD_CONCENTRACION,
   PRESENTACIONES,
+  UNIDADES_CONCENTRACION,
   type DatosMedicamento,
   type Medicamento,
   type Presentacion,
+  type UnidadConcentracion,
 } from './tipos';
 
 interface Props {
@@ -21,7 +24,8 @@ interface Campos {
   nombre: string;
   principioActivo: string;
   presentacion: Presentacion | '';
-  concentracion: string;
+  concentracionValor: string;
+  concentracionUnidad: UnidadConcentracion | '';
   laboratorio: string;
   lote: string;
   cantidadStock: string;
@@ -37,16 +41,52 @@ type Tocados = Partial<Record<keyof Campos, boolean>>;
 const PATRON_LOTE = /^[0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ][0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ ._/-]*$/;
 /** Texto legible: al menos una letra (evita nombres o ubicaciones solo numéricos). */
 const PATRON_TEXTO = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
-/** Concentración con número y unidad (500 mg, 5 ml, 10 %). */
-const PATRON_CONCENTRACION =
-  /^(?=.*\d)(?=.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ%µμ])[0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ%µμ .,/+*-]+$/;
+/** Valor de la concentración: dígitos con un separador decimal opcional (500, 0,5). */
+const PATRON_VALOR_CONCENTRACION = /^\d+(?:[.,]\d+)?$/;
+
+/** Quita los caracteres especiales del valor y deja un único separador decimal. */
+function limpiarValorConcentracion(texto: string): string {
+  const limpio = texto.replace(/[^\d.,]/g, '');
+  const separador = limpio.search(/[.,]/);
+  if (separador === -1) {
+    return limpio;
+  }
+  return limpio.slice(0, separador + 1) + limpio.slice(separador + 1).replace(/[.,]/g, '');
+}
+
+/** Separa una concentración guardada («500 mg») en valor y unidad conocida. */
+function descomponerConcentracion(texto: string): {
+  valor: string;
+  unidad: UnidadConcentracion | '';
+} {
+  const coincidencia = /^\s*(\d+(?:[.,]\d+)?)\s*(\S.*?)\s*$/.exec(texto);
+  if (!coincidencia) {
+    return { valor: '', unidad: '' };
+  }
+  const unidad = UNIDADES_CONCENTRACION.find(
+    (candidata) => candidata.toLowerCase() === coincidencia[2].toLowerCase(),
+  );
+  return { valor: coincidencia[1], unidad: unidad ?? '' };
+}
+
+/** Indica si una concentración guardada se puede editar con valor y unidad de la lista. */
+function esConcentracionValida(texto: string): boolean {
+  const { valor, unidad } = descomponerConcentracion(texto);
+  return valor !== '' && unidad !== '';
+}
+
+function componerConcentracion(valor: string, unidad: UnidadConcentracion | ''): string {
+  return `${valor.trim()} ${unidad}`.trim();
+}
 
 function camposIniciales(medicamento?: Medicamento): Campos {
+  const concentracion = descomponerConcentracion(medicamento?.concentracion ?? '');
   return {
     nombre: medicamento?.nombre ?? '',
     principioActivo: medicamento?.principioActivo ?? '',
     presentacion: medicamento?.presentacion ?? '',
-    concentracion: medicamento?.concentracion ?? '',
+    concentracionValor: concentracion.valor,
+    concentracionUnidad: concentracion.unidad,
     laboratorio: medicamento?.laboratorio ?? '',
     lote: medicamento?.lote ?? '',
     cantidadStock: '',
@@ -101,13 +141,21 @@ function validar(campos: Campos, esAlta: boolean): Errores {
     errores.presentacion = 'La presentación no es válida.';
   }
 
-  const concentracion = campos.concentracion.trim();
-  if (!concentracion) {
-    errores.concentracion = 'La concentración es obligatoria.';
-  } else if (concentracion.length > 40) {
-    errores.concentracion = 'La concentración no puede superar 40 caracteres.';
-  } else if (!PATRON_CONCENTRACION.test(concentracion)) {
-    errores.concentracion = 'La concentración debe incluir un número y una unidad (p. ej. 500 mg).';
+  const valorConcentracion = campos.concentracionValor.trim();
+  if (!valorConcentracion) {
+    errores.concentracionValor = 'La concentración es obligatoria.';
+  } else if (!PATRON_VALOR_CONCENTRACION.test(valorConcentracion)) {
+    errores.concentracionValor = 'La concentración solo admite números (p. ej. 500).';
+  } else {
+    const numero = Number(valorConcentracion.replace(',', '.'));
+    if (numero <= 0 || numero > 1_000_000) {
+      errores.concentracionValor = 'La concentración debe ser mayor que 0 y máximo 1000000.';
+    }
+  }
+  if (!campos.concentracionUnidad) {
+    errores.concentracionUnidad = 'Seleccione una unidad de medida de la lista.';
+  } else if (!UNIDADES_CONCENTRACION.includes(campos.concentracionUnidad)) {
+    errores.concentracionUnidad = 'La unidad de medida no es válida.';
   }
 
   texto(
@@ -166,6 +214,13 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
   const errores = useMemo(() => validar(campos, esAlta), [campos, esAlta]);
   const valido = Object.keys(errores).length === 0;
   const errorDe = (campo: keyof Campos) => (tocados[campo] ? errores[campo] : undefined);
+  const errorConcentracion = errorDe('concentracionValor') ?? errorDe('concentracionUnidad');
+  const concentracionAnteriorInvalida =
+    medicamento &&
+    !esConcentracionValida(medicamento.concentracion) &&
+    !(campos.concentracionValor.trim() && campos.concentracionUnidad)
+      ? medicamento.concentracion
+      : null;
 
   function cambiar<K extends keyof Campos>(campo: K, valor: Campos[K]) {
     setCampos((actual) => ({ ...actual, [campo]: valor }));
@@ -192,7 +247,7 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
       nombre: campos.nombre.trim(),
       principioActivo: campos.principioActivo.trim(),
       presentacion: campos.presentacion as Presentacion,
-      concentracion: campos.concentracion.trim(),
+      concentracion: componerConcentracion(campos.concentracionValor, campos.concentracionUnidad),
       laboratorio: campos.laboratorio.trim(),
       lote: campos.lote.trim(),
       stockMinimo: Number(campos.stockMinimo),
@@ -281,21 +336,57 @@ export function DialogoMedicamento({ cliente, medicamento, onCerrar, onHecho }: 
               ))}
             </select>
           </Campo>
-          <Campo
-            etiqueta="Concentración"
-            ayuda="Obligatoria · máximo 40 caracteres, con número y unidad (p. ej. 500 mg, 5 ml, 10 %)."
-            error={errorDe('concentracion')}
-          >
-            <input
-              maxLength={40}
-              placeholder="p. ej. 500 mg"
-              value={campos.concentracion}
-              aria-invalid={errorDe('concentracion') ? true : undefined}
-              onChange={(e) => cambiar('concentracion', e.target.value)}
-              onBlur={() => tocar('concentracion')}
-              disabled={enviando}
-            />
-          </Campo>
+          <fieldset className="campo grupo-concentracion">
+            <legend>Concentración</legend>
+            <div className="fila-concentracion">
+              <input
+                aria-label="Valor de la concentración"
+                inputMode="decimal"
+                maxLength={12}
+                placeholder="p. ej. 500"
+                value={campos.concentracionValor}
+                aria-invalid={errorDe('concentracionValor') ? true : undefined}
+                onChange={(e) =>
+                  cambiar('concentracionValor', limpiarValorConcentracion(e.target.value))
+                }
+                onBlur={() => tocar('concentracionValor')}
+                disabled={enviando}
+              />
+              <select
+                aria-label="Unidad de la concentración"
+                value={campos.concentracionUnidad}
+                aria-invalid={errorDe('concentracionUnidad') ? true : undefined}
+                onChange={(e) =>
+                  cambiar('concentracionUnidad', e.target.value as UnidadConcentracion | '')
+                }
+                onBlur={() => tocar('concentracionUnidad')}
+                disabled={enviando}
+              >
+                <option value="" disabled>
+                  Unidad…
+                </option>
+                {UNIDADES_CONCENTRACION.map((unidad) => (
+                  <option key={unidad} value={unidad}>
+                    {ETIQUETAS_UNIDAD_CONCENTRACION[unidad]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <span className="ayuda">
+              Obligatoria · escriba solo números y elija la unidad de la lista (p. ej. 500 mg).
+            </span>
+            {concentracionAnteriorInvalida && (
+              <span className="aviso-campo" role="status">
+                El valor actual «{concentracionAnteriorInvalida}» no es válido; indique el número y
+                elija una unidad.
+              </span>
+            )}
+            {errorConcentracion && (
+              <span className="error-campo" role="alert">
+                {errorConcentracion}
+              </span>
+            )}
+          </fieldset>
         </div>
 
         <div className="fila-campos">
