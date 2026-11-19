@@ -115,19 +115,6 @@ function esFechaValida(valor: string): boolean {
   }
   const [anio, mes, dia] = valor.split('-').map(Number);
   const fecha = new Date(Date.UTC(anio, mes - 1, dia));
-  const opcionesPresentacion = useMemo(
-    () => PRESENTACIONES.map((p) => ({ valor: p, etiqueta: ETIQUETAS_PRESENTACION[p] })),
-    [],
-  );
-  const opcionesUnidad = useMemo(
-    () =>
-      UNIDADES_CONCENTRACION.map((u) => ({
-        valor: u,
-        etiqueta: ETIQUETAS_UNIDAD_CONCENTRACION[u],
-      })),
-    [],
-  );
-
   return (
     fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia
   );
