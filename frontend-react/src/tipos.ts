@@ -24,6 +24,57 @@ export const ETIQUETAS_PRESENTACION: Readonly<Record<Presentacion, string>> = {
   OTRO: 'Otro',
 };
 
+/** Unidades de medida admitidas en la concentración de un medicamento. */
+export type UnidadConcentracion =
+  | 'mcg'
+  | 'mg'
+  | 'g'
+  | 'kg'
+  | 'ml'
+  | 'cl'
+  | 'l'
+  | '%'
+  | 'UI'
+  | 'mEq'
+  | 'mmol'
+  | 'mg/ml'
+  | 'mg/5 ml'
+  | 'UI/ml';
+
+export const UNIDADES_CONCENTRACION: readonly UnidadConcentracion[] = [
+  'mcg',
+  'mg',
+  'g',
+  'kg',
+  'ml',
+  'cl',
+  'l',
+  '%',
+  'UI',
+  'mEq',
+  'mmol',
+  'mg/ml',
+  'mg/5 ml',
+  'UI/ml',
+];
+
+export const ETIQUETAS_UNIDAD_CONCENTRACION: Readonly<Record<UnidadConcentracion, string>> = {
+  mcg: 'Microgramo (mcg)',
+  mg: 'Miligramo (mg)',
+  g: 'Gramo (g)',
+  kg: 'Kilogramo (kg)',
+  ml: 'Mililitro (ml)',
+  cl: 'Centilitro (cl)',
+  l: 'Litro (l)',
+  '%': 'Porcentaje (%)',
+  UI: 'Unidad internacional (UI)',
+  mEq: 'Miliequivalente (mEq)',
+  mmol: 'Milimol (mmol)',
+  'mg/ml': 'Miligramo por mililitro (mg/ml)',
+  'mg/5 ml': 'Miligramo por 5 mililitros (mg/5 ml)',
+  'UI/ml': 'Unidad internacional por mililitro (UI/ml)',
+};
+
 /** `MedicamentoResponse`. `stockBajo` y `vencido` los calcula el backend. */
 export interface Medicamento {
   idMedicamento: string;

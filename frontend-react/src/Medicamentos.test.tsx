@@ -151,7 +151,8 @@ describe('interfaz React de medicamentos', () => {
     completar('Nombre comercial', 'Ibuprofeno');
     completar('Principio activo', 'Ibuprofeno');
     completar('Presentación', 'TABLETA');
-    completar('Concentración', '400 mg');
+    completar('Valor de la concentración', '400');
+    completar('Unidad de la concentración', 'mg');
     completar('Laboratorio', 'Genfar');
     completar('Lote', 'L-2026-01');
     completar('Stock inicial', '10');
@@ -168,6 +169,66 @@ describe('interfaz React de medicamentos', () => {
     expect(lote.getAttribute('aria-invalid')).toBe('true');
     expect(within(dialogo).getByText(/El lote solo admite letras/)).toBeTruthy();
     expect((registrar as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('limpia los caracteres especiales y exige una unidad de la lista en la concentración', async () => {
+    const cliente = crearClienteFalso();
+    render(<Medicamentos cliente={cliente} rol="ADMIN" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo medicamento' }));
+    const dialogo = await screen.findByRole('dialog');
+
+    const valor = within(dialogo).getByLabelText('Valor de la concentración') as HTMLInputElement;
+    fireEvent.change(valor, { target: { value: '+ 1000 de aura' } });
+    expect(valor.value).toBe('1000');
+
+    const unidad = within(dialogo).getByLabelText(
+      'Unidad de la concentración',
+    ) as HTMLSelectElement;
+    expect(unidad.tagName).toBe('SELECT');
+    expect(within(unidad).getByRole('option', { name: 'Miligramo (mg)' })).toBeTruthy();
+
+    const registrar = within(dialogo).getByRole('button', { name: 'Registrar' });
+    expect((registrar as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.blur(unidad);
+    expect(within(dialogo).getByText('Seleccione una unidad de medida de la lista.')).toBeTruthy();
+  });
+
+  it('avisa al editar una concentración antigua con caracteres especiales', async () => {
+    const antiguo: Medicamento = { ...VIGENTE, concentracion: '+ 1000 de aura' };
+    const cliente = crearClienteFalso({ listar: vi.fn(async () => [antiguo]) });
+    render(<Medicamentos cliente={cliente} rol="ADMIN" />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Editar Ibuprofeno + 1000 de aura' }),
+    );
+    const dialogo = await screen.findByRole('dialog');
+
+    expect(within(dialogo).getByText(/no es válido/)).toBeTruthy();
+    expect(
+      (within(dialogo).getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it('rellena valor y unidad al editar una concentración válida', async () => {
+    const jarabe: Medicamento = { ...VIGENTE, concentracion: '250 mg/5 ml' };
+    const cliente = crearClienteFalso({ listar: vi.fn(async () => [jarabe]) });
+    render(<Medicamentos cliente={cliente} rol="ADMIN" />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Editar Ibuprofeno 250 mg/5 ml' }),
+    );
+    const dialogo = await screen.findByRole('dialog');
+
+    expect(
+      (within(dialogo).getByLabelText('Valor de la concentración') as HTMLInputElement).value,
+    ).toBe('250');
+    expect(
+      (within(dialogo).getByLabelText('Unidad de la concentración') as HTMLSelectElement).value,
+    ).toBe('mg/5 ml');
+    expect(within(dialogo).queryByText(/no es válido/)).toBeNull();
   });
 
   it('marca en rojo una cantidad de movimiento no numérica y bloquea el envío', async () => {
