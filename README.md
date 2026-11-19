@@ -2,13 +2,14 @@
 
 Sistema de gestión de un hospital: pacientes, trabajadores (doctores y enfermeros), historial
 clínico, inventario de medicamentos y usuarios con roles. Nació como una aplicación Swing con
-arquitectura MVC y hoy son tres procesos que se hablan por HTTP.
+arquitectura MVC y hoy son cuatro aplicaciones que se hablan por HTTP (dos frontends y dos
+servicios Spring Boot).
 
 > Proyecto de desarrollo y aprendizaje. Los dos servicios guardan sus datos en **MongoDB**
 > (cada uno en su propia base), así que sobreviven a los reinicios (ver
 > [Limitaciones conocidas](#limitaciones-conocidas)).
 
-URL: [PachocloSystem](https://pachoclo-system-frontend-liard.vercel.app/) · Medicamentos en React: [pachoclo-medicamentos-react](https://pachoclo-medicamentos-react.vercel.app/)
+URL: [PachocloSystem](https://pachoclo-system-frontend-liard.vercel.app/) · Medicamentos en React: [pachoclo-medicamentos-react](https://pachoclo-medicamentos-react.vercel.app/) · API Swagger: [Swagger UI](https://pachoclosystem-production-2dd64b51.up.railway.app/swagger-ui.html)
 
 [![Logo](frontend/public/logos/logo-sistema-160.png)](https://pachoclo-system-frontend-liard.vercel.app/)
 
@@ -152,10 +153,15 @@ MEDICAMENTOS_API_KEY=clave-servicio-ejemplo ADMIN_PASSWORD=admin-ejemplo-2026 \
   SPRING_MONGODB_URI='mongodb://localhost:27017/pachoclosystem?replicaSet=rs0' \
   ./mvnw spring-boot:run
 
-# Terminal 3: frontend (4200)
+# Terminal 3: frontend Angular (4200)
 cd frontend
 npm install
 npm start
+
+# Terminal 4 (opcional): frontend React de Medicamentos (5173)
+cd frontend-react
+npm install
+npm run dev
 ```
 
 ### PowerShell
@@ -175,13 +181,18 @@ $env:JWT_SECRET = "secreto-jwt-ejemplo-solo-desarrollo"
 $env:SPRING_MONGODB_URI = "mongodb://localhost:27017/pachoclosystem?replicaSet=rs0"
 .\mvnw.cmd spring-boot:run
 
-# Terminal 3: frontend (4200)
+# Terminal 3: frontend Angular (4200)
 cd frontend
 npm install
 npm start
+
+# Terminal 4 (opcional): frontend React de Medicamentos (5173)
+cd frontend-react
+npm install
+npm run dev
 ```
 
-Abra <http://localhost:4200>.
+Abra <http://localhost:4200> (y <http://localhost:5173> si levantó la interfaz React).
 
 ### Usuario inicial
 
@@ -305,11 +316,12 @@ Cada parte se prueba por separado, desde su carpeta:
 cd PachocloSystem && ./mvnw test          # API principal (en PowerShell: .\mvnw.cmd test)
 cd MedicamentosService && ./mvnw test     # microservicio de medicamentos
 cd frontend && npm test                   # unitarios de Angular (Vitest)
-cd frontend-react && npm test              # unitarios de la app React (Vitest)
+cd frontend-react && npm test             # unitarios de la app React (Vitest)
 cd frontend && npm run build              # build de producción en frontend/dist
+cd frontend-react && npm run build        # chequeo de tipos y build en frontend-react/dist
 ```
 
-El frontend también tiene `npm run lint` y `npm run format:check`. No hace falta arrancar Mongo ni
+Ambos frontends tienen `npm run format:check`, y el de Angular también `npm run lint`. No hace falta arrancar Mongo ni
 los servicios, pero los tests de los dos backends necesitan **Docker** (Testcontainers arranca su
 propio MongoDB).
 
