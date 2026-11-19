@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { mensajesDeError, type ClienteMedicamentos } from './api';
 import { Modal } from './Modal';
 import { SelectorDesplegable } from './SelectorDesplegable';
