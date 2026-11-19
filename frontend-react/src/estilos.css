@@ -22,6 +22,7 @@ body {
   border-bottom: 3px solid #38bdf8;
   background: #00639b;
   color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 45, 75, 0.14);
 }
 
 .barra-app .marca {
@@ -78,6 +79,7 @@ body {
   min-height: 100vh;
   place-items: center;
   padding: 24px 16px;
+  background: linear-gradient(160deg, #f0f6ff 0%, #f8f9ff 55%, #eef4fa 100%);
 }
 
 .tarjeta-login {
@@ -124,7 +126,7 @@ body {
 .encabezado {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
@@ -139,18 +141,6 @@ h1 {
 .subtitulo {
   margin: 4px 0 0;
   color: #44474e;
-}
-
-.etiqueta-framework {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: #d9e2ff;
-  color: #001a41;
-  font-size: 12px;
-  font-weight: 600;
-  vertical-align: middle;
 }
 
 /* ---- Botones ---- */
@@ -168,6 +158,10 @@ h1 {
   font: inherit;
   font-weight: 500;
   cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .boton:hover:not(:disabled) {
@@ -278,8 +272,8 @@ h1 {
 .pestanas {
   display: flex;
   gap: 4px;
-  margin: 24px 0 16px;
-  border-bottom: 1px solid #c4c7cc;
+  margin: 20px 0 16px;
+  border-bottom: 1px solid #d7dce4;
   overflow-x: auto;
 }
 
@@ -293,6 +287,10 @@ h1 {
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .pestana:hover {
@@ -313,8 +311,13 @@ h1 {
 .filtros {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 12px;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin-bottom: 14px;
+}
+
+.filtros:empty {
+  display: none;
 }
 
 .buscador,
@@ -338,6 +341,7 @@ h1 {
 .dias span:first-child {
   color: #44474e;
   font-size: 12px;
+  font-weight: 500;
 }
 
 input,
@@ -721,6 +725,12 @@ select[aria-invalid='true']:focus {
   display: block;
   color: #44474e;
   font-size: 12px;
+}
+
+.barra-app .secundario {
+  display: inline;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
 }
 
 .id {

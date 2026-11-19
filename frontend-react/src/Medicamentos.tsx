@@ -148,9 +148,7 @@ export function Medicamentos({ cliente, rol }: PropsMedicamentos) {
     <section className="medicamentos" aria-labelledby="titulo-medicamentos">
       <header className="encabezado">
         <div>
-          <h1 id="titulo-medicamentos">
-            Medicamentos <span className="etiqueta-framework">React</span>
-          </h1>
+          <h1 id="titulo-medicamentos">Medicamentos</h1>
           <p className="subtitulo">Inventario de medicamentos de PachocloSystem.</p>
         </div>
         {puedeEscribir && (
