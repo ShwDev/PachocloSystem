@@ -156,8 +156,8 @@ describe('CambiarRolDialogoComponent', () => {
   it('ofrece los trabajadores libres del tipo y, aunque ya tenga usuario, el suyo', async () => {
     const { elegirRol, opcionesTrabajador } = await renderizar();
 
-    // DOC-0001 es suyo (se ofrece), DOC-0002 está libre y DOC-0003 es de otro.
-    expect(await opcionesTrabajador()).toEqual(['DOC-0001', 'DOC-0002']);
+    // DOC-0001 (Eva) es suyo y DOC-0002 (Carlos) está libre; ordenados alfabéticamente.
+    expect(await opcionesTrabajador()).toEqual(['DOC-0002', 'DOC-0001']);
 
     await elegirRol('Enfermero');
     expect(await opcionesTrabajador()).toEqual(['ENF-0001']);
@@ -232,7 +232,7 @@ describe('CambiarRolDialogoComponent', () => {
     elemento.querySelector<HTMLButtonElement>('.reintentar')!.click();
     await estable();
 
-    expect(await opcionesTrabajador()).toEqual(['DOC-0001', 'DOC-0002']);
+    expect(await opcionesTrabajador()).toEqual(['DOC-0002', 'DOC-0001']);
     expect(elemento.querySelector('[role="alert"]')).toBeNull();
   });
 });

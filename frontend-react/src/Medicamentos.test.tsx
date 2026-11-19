@@ -269,4 +269,20 @@ describe('interfaz React de medicamentos', () => {
 
     await waitFor(() => expect(listar).toHaveBeenLastCalledWith('ibu', expect.any(AbortSignal)));
   });
+
+  it('selecciona opciones del desplegable al pulsar su primera letra y cicla coincidencias', async () => {
+    render(<Medicamentos cliente={crearClienteFalso()} rol="ADMIN" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Nuevo medicamento' }));
+    const dialogo = await screen.findByRole('dialog');
+
+    const presentacion = within(dialogo).getByRole('button', { name: 'Presentación' });
+    fireEvent.keyDown(presentacion, { key: 'c' });
+    expect(presentacion.textContent).toContain('Cápsula');
+
+    fireEvent.keyDown(presentacion, { key: 'c' });
+    expect(presentacion.textContent).toContain('Crema');
+
+    fireEvent.keyDown(presentacion, { key: 'g' });
+    expect(presentacion.textContent).toContain('Gotas');
+  });
 });

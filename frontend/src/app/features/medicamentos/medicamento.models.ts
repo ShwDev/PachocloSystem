@@ -3,13 +3,13 @@ export type Presentacion =
   'TABLETA' | 'CAPSULA' | 'JARABE' | 'SUSPENSION' | 'INYECTABLE' | 'CREMA' | 'GOTAS' | 'OTRO';
 
 export const PRESENTACIONES: readonly Presentacion[] = [
-  'TABLETA',
   'CAPSULA',
-  'JARABE',
-  'SUSPENSION',
-  'INYECTABLE',
   'CREMA',
   'GOTAS',
+  'INYECTABLE',
+  'JARABE',
+  'SUSPENSION',
+  'TABLETA',
   'OTRO',
 ];
 

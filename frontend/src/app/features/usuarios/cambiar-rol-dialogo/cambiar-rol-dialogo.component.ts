@@ -92,17 +92,21 @@ export class CambiarRolDialogoComponent {
   private readonly vinculados = signal<ReadonlySet<string>>(new Set());
   protected readonly erroresCarga = signal<readonly string[]>([]);
   protected readonly cargandoTrabajadores = signal(true);
-  /** Trabajadores del tipo del rol elegido, incluido el que ya es suyo. */
+  /** Trabajadores del tipo del rol elegido, incluido el que ya es suyo, ordenados alfabéticamente. */
   protected readonly disponibles = computed(() => {
     const rol = this.rol();
     if (rol === null) {
       return [];
     }
-    return this.trabajadores().filter(
-      (t) =>
-        rolDeUsuario(t.rol) === rol &&
-        (t.idTrabajador === this.usuario.idTrabajador || !this.vinculados().has(t.idTrabajador)),
-    );
+    return this.trabajadores()
+      .filter(
+        (t) =>
+          rolDeUsuario(t.rol) === rol &&
+          (t.idTrabajador === this.usuario.idTrabajador || !this.vinculados().has(t.idTrabajador)),
+      )
+      .sort((a, b) =>
+        a.nombreCompleto.localeCompare(b.nombreCompleto, 'es', { sensitivity: 'base' }),
+      );
   });
 
   protected readonly enviando = signal(false);

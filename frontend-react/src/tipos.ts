@@ -3,13 +3,13 @@ export type Presentacion =
   'TABLETA' | 'CAPSULA' | 'JARABE' | 'SUSPENSION' | 'INYECTABLE' | 'CREMA' | 'GOTAS' | 'OTRO';
 
 export const PRESENTACIONES: readonly Presentacion[] = [
-  'TABLETA',
   'CAPSULA',
-  'JARABE',
-  'SUSPENSION',
-  'INYECTABLE',
   'CREMA',
   'GOTAS',
+  'INYECTABLE',
+  'JARABE',
+  'SUSPENSION',
+  'TABLETA',
   'OTRO',
 ];
 
@@ -42,19 +42,19 @@ export type UnidadConcentracion =
   | 'UI/ml';
 
 export const UNIDADES_CONCENTRACION: readonly UnidadConcentracion[] = [
-  'mcg',
-  'mg',
+  'cl',
   'g',
   'kg',
-  'ml',
-  'cl',
   'l',
+  'mcg',
+  'mEq',
+  'mg',
+  'mg/5 ml',
+  'mg/ml',
+  'ml',
+  'mmol',
   '%',
   'UI',
-  'mEq',
-  'mmol',
-  'mg/ml',
-  'mg/5 ml',
   'UI/ml',
 ];
 

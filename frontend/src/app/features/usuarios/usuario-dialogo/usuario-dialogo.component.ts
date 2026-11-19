@@ -80,12 +80,17 @@ export class UsuarioDialogoComponent {
   private readonly vinculados = signal<ReadonlySet<string>>(new Set());
   protected readonly erroresCarga = signal<readonly string[]>([]);
   protected readonly cargandoTrabajadores = signal(true);
-  /** Trabajadores del tipo del rol elegido que aún no tienen usuario. */
+  /** Trabajadores del tipo del rol elegido que aún no tienen usuario, ordenados alfabéticamente. */
   protected readonly disponibles = computed(() => {
     const rol = this.rol();
-    return this.trabajadores().filter(
-      (t) => rol !== null && rolDeUsuario(t.rol) === rol && !this.vinculados().has(t.idTrabajador),
-    );
+    return this.trabajadores()
+      .filter(
+        (t) =>
+          rol !== null && rolDeUsuario(t.rol) === rol && !this.vinculados().has(t.idTrabajador),
+      )
+      .sort((a, b) =>
+        a.nombreCompleto.localeCompare(b.nombreCompleto, 'es', { sensitivity: 'base' }),
+      );
   });
 
   protected readonly enviando = signal(false);

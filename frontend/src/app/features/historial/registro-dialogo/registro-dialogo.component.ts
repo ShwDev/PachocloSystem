@@ -230,7 +230,14 @@ export class RegistroDialogoComponent {
   protected readonly inventario = signal<Inventario>({ estado: 'sin-cargar' });
   protected readonly medicamentosInventario = computed(() => {
     const inventario = this.inventario();
-    return inventario.estado === 'listo' ? inventario.medicamentos : [];
+    if (inventario.estado !== 'listo') {
+      return [];
+    }
+    return [...inventario.medicamentos].sort(
+      (a, b) =>
+        a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }) ||
+        a.concentracion.localeCompare(b.concentracion, 'es', { sensitivity: 'base' }),
+    );
   });
   protected readonly erroresInventario = computed(() => {
     const inventario = this.inventario();

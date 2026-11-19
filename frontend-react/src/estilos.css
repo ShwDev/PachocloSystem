@@ -487,7 +487,8 @@ select[aria-invalid='true']:focus {
   cursor: pointer;
 }
 
-.desplegable-opcion:hover {
+.desplegable-opcion:hover,
+.desplegable-opcion.activa {
   background: rgba(0, 99, 155, 0.08);
 }
 
@@ -495,6 +496,10 @@ select[aria-invalid='true']:focus {
   background: #d9e2ff;
   color: #001a41;
   font-weight: 500;
+}
+
+.desplegable-opcion.seleccionada.activa {
+  background: #c7d5ff;
 }
 
 /* ---- Selector de fecha personalizado ---- */
